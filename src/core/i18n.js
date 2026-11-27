@@ -1,30 +1,30 @@
 'use strict';
 /**
- * 界面本地化（i18n）—— 不依赖 Electron，可同时被主进程与 preload 使用。
+ * UI localization (i18n) — zero Electron dependencies; usable in both main and preload.
  *
- * 设计取舍（对应当前仓库的约定）：
- * - 源码里的界面文案仍然是中文（CONTRIBUTING 的历史约定），词典以「中文原文」为 key，
- *   只在**显示层**翻译。逻辑判断、正则、adb/emulator 命令、包名、路径、配置键、
- *   IPC 通道一律不经过这里，因此翻译不会改变程序行为。
- * - 默认中文：没有词典条目时原样返回中文；非中文条目缺失时逐条回退中文。
- * - 带插值的文案（如「已安装 {n} 个应用」）支持精确查表与按骨架反查两种方式，
- *   动态拼出来的字符串也能命中。
+ * Design:
+ * - English is the native source and default language throughout the codebase.
+ * - Dictionaries in `src/i18n/<lang>.json` use English source strings as keys and
+ *   translate only at the display boundary. Logic checks, regexes, adb/emulator
+ *   commands, package names, paths, config keys, and IPC channels never pass through
+ *   i18n, so localization never alters program behavior.
+ * - Missing translations fall back to English (never Chinese).
+ * - Interpolated strings (e.g. "Installed {n} apps") support both exact lookup
+ *   and pattern matching so dynamically formatted strings also translate.
  *
- * 支持的语言：zh(中文) / en(English) / ru(Русский) / vi(Tiếng Việt) / es(Español) /
- *             pt(Português) / ja(日本語) / ko(한국어)。可继续在 src/i18n/ 下加词典。
+ * Supported languages: en (English), zh (简体中文), ru (Русский), vi (Tiếng Việt),
+ *   es (Español), pt (Português), ja (日本語), ko (한국어).
  *
- * 语言来源优先级：APKSTART_LANG / --lang= 环境覆盖（冒烟测试用）> settings.uiLanguage
- * > 系统首选语言（zh* → 中文，其它按系统语言匹配，匹配不到 → 英文）。
+ * Priority: APKSTART_LANG / --lang= override > settings.uiLanguage
+ *   > system preferred languages (fallback to 'en').
  */
-const EN = require('../i18n/en.json');
-
-// 其余语种词典：缺失时降级为空对象，保证某个语种文件损坏也不会拖垮启动。
 function loadDict(name) {
   try { return require('../i18n/' + name + '.json'); } catch (_) { return {}; }
 }
+
 const DICTS = {
-  zh: {}, // 中文是源语言，不需要词典
-  en: EN,
+  en: {}, // English is the source language
+  zh: loadDict('zh'),
   ru: loadDict('ru'),
   vi: loadDict('vi'),
   es: loadDict('es'),
@@ -33,11 +33,11 @@ const DICTS = {
   ko: loadDict('ko'),
 };
 
-/** 支持的语言清单（供设置界面下拉与首次选择引导使用）。 */
+/** Supported languages list for the Settings dropdown and first-run language picker. */
 const LANGUAGES = [
-  { code: 'auto', label: '跟随系统 / Follow system' },
-  { code: 'zh', label: '简体中文' },
+  { code: 'auto', label: 'Follow system' },
   { code: 'en', label: 'English' },
+  { code: 'zh', label: '简体中文' },
   { code: 'ru', label: 'Русский' },
   { code: 'vi', label: 'Tiếng Việt' },
   { code: 'es', label: 'Español' },
@@ -46,9 +46,9 @@ const LANGUAGES = [
   { code: 'ko', label: '한국어' },
 ];
 
-const CJK_RE = /[\u4e00-\u9fff]/;
+const LETTER_RE = /[A-Za-z]/;
 
-let lang = 'zh';
+let lang = 'en';
 let dict = {};
 let patterns = null;
 let literalKeys = null;
@@ -57,8 +57,8 @@ const patternCache = new Map();
 function normalizeLang(loc) {
   const s = String(loc || '').trim().toLowerCase().replace('_', '-');
   if (!s) return '';
-  if (s === 'zh' || s.startsWith('zh-')) return 'zh';
   if (s === 'en' || s.startsWith('en-')) return 'en';
+  if (s === 'zh' || s.startsWith('zh-')) return 'zh';
   if (s === 'ru' || s.startsWith('ru-')) return 'ru';
   if (s === 'vi' || s.startsWith('vi-')) return 'vi';
   if (s === 'es' || s.startsWith('es-')) return 'es';
@@ -68,10 +68,9 @@ function normalizeLang(loc) {
   return '';
 }
 
-/** 从系统语言列表里挑一个受支持的语言；都不匹配时落到英文（与历史行为一致）。 */
+/** Pick the first supported language from systemLanguages; default to English. */
 function pickSystemLang(list) {
   const arr = Array.isArray(list) ? list : [list];
-  // 按系统语言优先级取第一个受支持的语言
   for (const item of arr) {
     const n = normalizeLang(item);
     if (n) return n;
@@ -80,8 +79,8 @@ function pickSystemLang(list) {
 }
 
 /**
- * @param {string} setting 'auto' | 'zh' | 'en' | 'ru' | ...
- * @param {string[]|string} systemLanguages Electron getPreferredSystemLanguages() 的结果
+ * @param {string} setting 'auto' | 'en' | 'zh' | 'ru' | ...
+ * @param {string[]|string} systemLanguages Result of Electron getPreferredSystemLanguages()
  */
 function resolveLanguage(setting, systemLanguages) {
   const forced = normalizeLang(process.env.APKSTART_LANG);
@@ -98,7 +97,7 @@ function resolveLanguage(setting, systemLanguages) {
 
 function setLanguage(next) {
   const n = normalizeLang(next);
-  lang = n || 'zh';
+  lang = n || 'en';
   dict = DICTS[lang] || {};
   patterns = null;
   literalKeys = null;
@@ -107,13 +106,13 @@ function setLanguage(next) {
 
 function getLanguage() { return lang; }
 
-/** 当前语言的词典浅拷贝：preload 通过 contextBridge 暴露给渲染层时用。 */
+/** Shallow copy of the active dictionary, exposed to renderer via contextBridge. */
 function dictionary() { return { ...dict }; }
 
-/** 该语言是否有可用词典（zh 视为总是可用）。 */
+/** Whether a dictionary is available for the given language code (en is always available). */
 function hasDictionary(code) {
   const n = normalizeLang(code);
-  if (n === 'zh') return true;
+  if (n === 'en') return true;
   return !!(DICTS[n] && Object.keys(DICTS[n]).length);
 }
 
@@ -121,40 +120,19 @@ function escapeRe(s) {
   return String(s).replace(/[.*+?^$()|[\]\\]/g, '\\$&');
 }
 
-/**
- * 拼装/骨架翻译后的译文润色：
- * - 中文标点（顿号/全角标点）转成目标语言常用标点（目前以拉丁语种为主）；
- * - 英文里 "{n} notices" 在 n=1 时改成单数。只处理明确的英文复数词，避免误伤。
- * 日语/韩语不使用这些拉丁规则。
- */
 function polish(text) {
-  let s = String(text);
-  if (lang === 'ja' || lang === 'ko' || lang === 'zh') return s.trim();
-  return s
-    .replace(/、/g, ', ')
-    .replace(/，/g, ', ')
-    .replace(/；/g, '; ')
-    .replace(/：/g, ': ')
-    .replace(/（/g, ' (')
-    .replace(/）/g, ')')
-    .replace(/。/g, '. ')
-    .replace(/\b1 (notices|apps|items|minutes|hours|days|leftovers|files|cores|threads)\b/g,
-      (m, word) => '1 ' + word.replace(/s$/, ''))
-    .replace(/\s+([,.;:])/g, '$1')
-    .replace(/;([A-Za-z])/g, '; $1')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  return String(text).trim();
 }
 
-/** 界面文案匹配前统一空白：HTML 里跨行的段落、模板字符串里的缩进都能对上同一条译文。 */
+/** Normalize whitespace before lookup so multiline HTML/template strings match cleanly. */
 function normalizeKey(s) {
   return String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 }
 
 /**
- * 键里的 {name} 是插值占位符。运行时字符串里的值已经填充好，
- * 所以按「键骨架」生成正则反查；纯占位符键（去掉占位符后没有中文）会被排除，
- * 否则会变成匹配任意字符串的万能模式。
+ * Build regex patterns for dictionary keys containing `{name}` placeholders.
+ * Keys with no English letters outside placeholders are skipped to avoid
+ * matching arbitrary strings.
  */
 function buildPatterns() {
   if (patterns) return patterns;
@@ -162,7 +140,7 @@ function buildPatterns() {
   for (const key of Object.keys(dict)) {
     const norm = normalizeKey(key);
     if (!/\{[^{}]+\}/.test(norm)) continue;
-    if (!CJK_RE.test(norm.replace(/\{[^{}]+\}/g, ''))) continue;
+    if (!LETTER_RE.test(norm.replace(/\{[^{}]+\}/g, ''))) continue;
     const parts = [];
     const names = [];
     let last = 0;
@@ -192,7 +170,6 @@ function matchPattern(raw, depth) {
       const idx = p.names.indexOf(token);
       if (idx < 0) return token;
       const value = m[idx + 1];
-      // 捕获到的值本身可能是一句中文（例如错误标题），再查一层词典
       const translated = depth < 3 ? lookup(value, depth + 1) : undefined;
       return translated === undefined ? value : translated;
     });
@@ -201,55 +178,32 @@ function matchPattern(raw, depth) {
 }
 
 /**
- * 源码里有些文案是跨行拼接出来的（'甲' + '乙'），词典按整句查不到。
- * 这里做一次保守的「整句拼装」：只替换完整命中的中文词条，替换后若还剩中文就放弃，
- * 避免出现半中半外的夹生界面。
- */
-function compose(raw, depth) {
-  if (!literalKeys) {
-    literalKeys = Object.keys(dict)
-      .filter((k) => !/\{/.test(k) && CJK_RE.test(k) && k.length >= 2)
-      .sort((a, b) => b.length - a.length);
-  }
-  let out = raw;
-  let replaced = 0;
-  for (const key of literalKeys) {
-    const at = out.indexOf(key);
-    if (at < 0) continue;
-    out = out.split(key).join(lookup(key, depth + 1) || dict[key]);
-    replaced++;
-  }
-  return replaced && !CJK_RE.test(out) ? out : undefined;
-}
-
-/**
- * 查一条译文。找不到返回 undefined（调用方据此决定是否回退中文）。
- * 主进程可以用 lookup() 判断「有没有译文」，渲染层用它避免无谓的 DOM 改动。
+ * Look up a translation. Returns undefined if not found (or if active language is 'en').
  */
 function lookup(text, depth = 0) {
-  if (lang === 'zh' || !dict || !Object.keys(dict).length) return undefined;
+  if (lang === 'en' || !dict || !Object.keys(dict).length) return undefined;
   const raw = String(text == null ? '' : text);
-  if (!raw || !CJK_RE.test(raw)) return undefined;
+  if (!raw) return undefined;
   if (Object.prototype.hasOwnProperty.call(dict, raw)) return dict[raw];
   const norm = normalizeKey(raw);
   if (norm !== raw && Object.prototype.hasOwnProperty.call(dict, norm)) return dict[norm];
   if (patternCache.has(norm)) return patternCache.get(norm) || undefined;
-  let hit = matchPattern(norm, depth) || compose(norm, depth);
+  let hit = matchPattern(norm, depth);
   if (hit !== undefined) hit = polish(hit);
   patternCache.set(norm, hit || '');
   return hit;
 }
 
 /**
- * 翻译一条界面文案；vars 用于精确查表 + 插值（如 t('已安装 {n} 个应用', { n: 3 })）。
- * 中文模式或没有译文时原样返回。
+ * Translate a UI string with optional placeholder interpolation:
+ * e.g. t('Installed {n} apps', { n: 3 }).
+ * Falls back to the English source string if no translation is found.
  */
 function t(text, vars) {
-  if (lang === 'zh' || !dict || !Object.keys(dict).length) return text;
   const raw = String(text == null ? '' : text);
   if (!raw) return raw;
-  let out = lookup(raw);
-  if (out === undefined) return raw;
+  let out = (lang !== 'en' && dict && Object.keys(dict).length) ? lookup(raw) : undefined;
+  if (out === undefined) out = raw;
   if (vars && typeof vars === 'object') {
     out = out.replace(/\{([^{}]+)\}/g, (m, k) => {
       const key = String(k).trim();
@@ -271,6 +225,6 @@ module.exports = {
   normalizeKey,
   lookup,
   t,
-  // 测试用：清掉按语言缓存的骨架正则
+  // For tests: clear cached pattern regexes
   _reset() { patterns = null; literalKeys = null; patternCache.clear(); },
 };

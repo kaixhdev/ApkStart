@@ -4,17 +4,17 @@ const appI18n = require('./core/i18n');
 
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
-// 语言在窗口创建时由主进程同步给出；之后切语言走 i18n:lang 广播，
-// 不重载窗口、不打断正在运行的应用。
+// Language is provided synchronously by the main process on window creation; subsequent switches
+// broadcast via i18n:lang without reloading the window or interrupting running apps.
 try {
   const boot = ipcRenderer.sendSync('i18n:bootstrap');
-  appI18n.setLanguage((boot && boot.lang) || 'zh');
-} catch (_) { /* 非 Electron 环境下按中文 */ }
+  appI18n.setLanguage((boot && boot.lang) || 'en');
+} catch (_) { /* Fallback to English outside Electron */ }
 const langListeners = new Set();
 ipcRenderer.on('i18n:lang', (_e, next) => {
   appI18n.setLanguage(next);
   for (const cb of [...langListeners]) {
-    try { cb(next); } catch (_) { /* 单个监听器失败不影响其它窗口 */ }
+    try { cb(next); } catch (_) { /* A single listener failure must not affect other windows */ }
   }
 });
 
@@ -61,18 +61,18 @@ contextBridge.exposeInMainWorld('apkstart', {
   dataInfo: () => invoke('runtime:dataInfo'),
   setDataSize: (gb) => invoke('runtime:setDataSize', gb),
   resources: () => invoke('engine:resources'),
-  // 本机体检 / 自动配置
+  // Local preflight diagnostics / auto-configuration
   preflightRun: () => invoke('preflight:run'),
   preflightApply: () => invoke('preflight:apply'),
-  // 自动检测（自动 debug）：定时采集 + 判定，产出按分类归组的问题清单
+  // Automatic diagnostics (auto-debug): periodic sampling + grouped issue list
   autodebugRun: () => invoke('autodebug:run'),
   autodebugState: () => invoke('autodebug:state'),
   autodebugConfig: (patch) => invoke('autodebug:config', patch || {}),
-  // 自动检测的修复动作
+  // Auto-debug repair actions
   clearOrphans: () => invoke('app:clearOrphans'),
   clearSnapshot: () => invoke('app:clearSnapshot'),
   restartRuntime: () => invoke('runtime:restart'),
-  // 驱动（兼容补丁）：列清单 / 导入 / 打开目录 / 导出本机模板 / 启用停用
+  // Drivers (compatibility patches): list / import / open folder / export template / enable-disable
   driversList: () => invoke('drivers:list'),
   driversImport: () => invoke('drivers:import'),
   driversOpenFolder: () => invoke('drivers:openFolder'),
@@ -100,7 +100,7 @@ contextBridge.exposeInMainWorld('apkstart', {
   installAehd: () => invoke('provision:installAehd'),
   enableAccel: () => invoke('provision:enableAccel'),
   enableVirtualization: () => invoke('provision:enableVirtualization'),
-  // 打开「启用或关闭 Windows 功能」对话框（商店版只能引导用户自己去勾选）
+  // Open the "Turn Windows features on or off" dialog (Store build guides user to enable manually)
   openWindowsFeatures: () => invoke('provision:openWindowsFeatures'),
   downloadIso: () => invoke('provision:downloadIso'),
   createDisk: (gb) => invoke('provision:createDisk', gb),
@@ -113,7 +113,7 @@ contextBridge.exposeInMainWorld('apkstart', {
   removeSelf: () => invoke('app:removeSelf'),
   setSharedDir: (dir) => invoke('settings:setSharedDir', dir),
 
-  // 在线更新（GitHub Releases）
+  // Online updates (GitHub Releases / Gitee)
   updateCheck: (opts) => invoke('app:updateCheck', opts || {}),
   updateApply: () => invoke('app:updateApply'),
   updateCancel: () => invoke('app:updateCancel'),
@@ -130,7 +130,7 @@ contextBridge.exposeInMainWorld('apkstart', {
   openSharedDir: () => invoke('share:open'),
 
   openExternal: (url) => invoke('shell:open', url),
-  // 0.6.2 内置手册：传 { topic } / { issue } / { error } 都会定位到对应章节
+  // Built-in manual: { topic } / { issue } / { error } jumps to the corresponding section
   openManual: (payload) => invoke('manual:open', payload || {}),
   winMinimize: () => invoke('window:minimize'),
   winMaximize: () => invoke('window:maximize'),
@@ -138,7 +138,7 @@ contextBridge.exposeInMainWorld('apkstart', {
   winHide: () => invoke('window:hide'),
   bringAppToFront: () => invoke('app:foreground'),
 
-  // 应用窗口（只有 旋转 / 最小化 / 最大化 / 关闭）用到的接口
+  // App window controls (Rotate / Minimize / Maximize / Close)
   shell: {
     state: () => invoke('shell:state'),
     minimize: () => invoke('shell:minimize'),
@@ -155,7 +155,7 @@ contextBridge.exposeInMainWorld('apkstart', {
     },
   },
 
-  // 安卓系统设置（WiFi / 音量 / 显示 / 动画 / 权限 …）
+  // Android system settings (Wi-Fi / Volume / Display / Animations / Permissions …)
   android: {
     status: () => invoke('android:status'),
     set: (key, value) => invoke('android:set', { key, value }),
@@ -165,7 +165,7 @@ contextBridge.exposeInMainWorld('apkstart', {
     grantAll: (pkg) => invoke('android:grantAll', pkg),
   },
 
-  // 按键映射（游戏键盘→触屏）
+  // Keymap (keyboard -> touch mapping)
   keymap: {
     getPresets: () => invoke('keymap:getPresets'),
     getMap: (pkg) => invoke('keymap:getMap', pkg),
@@ -177,12 +177,12 @@ contextBridge.exposeInMainWorld('apkstart', {
 
   pathForFile: (file) => webUtils.getPathForFile(file),
 
-  // 渲染层本地化：词典以中文原文为 key，只影响显示，不参与逻辑
+  // Renderer localization: English source strings as keys; display-only, never affects logic
   i18n: {
     getLanguage: () => appI18n.getLanguage(),
     t: (text, vars) => appI18n.t(text, vars),
     lookup: (text) => appI18n.lookup(text),
-    // 冒烟测试用：把界面里没译到的中文打到渲染进程控制台
+    // For smoke tests: log untranslated strings to renderer console
     collect: process.env.APKSTART_I18N_COLLECT === '1',
     onLanguageChange: (cb) => {
       if (typeof cb === 'function') langListeners.add(cb);

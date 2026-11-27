@@ -4,11 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    name: 单元测试（Windows / Node ${{ matrix.node }}）
+    name: Build & Test (Windows / Node ${{ matrix.node }})
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -16,25 +20,49 @@ jobs:
         node: [20, 22]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      # 单元测试不需要 Electron 二进制，跳过 188MB 下载以加快 CI
-      - name: 安装依赖
+      - name: Install dependencies
         run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
-      - name: 运行测试
+      - name: Verify Electron binary
+        run: npm run verify:electron
+
+      - name: Check i18n dictionaries
+        run: npm run i18n:check
+
+      - name: Build user manual
+        run: npm run build:manual
+
+      - name: Run unit and integration tests
         run: npm test
 
-      # 直接驱动 agent.ps1 内嵌 C# 的钩子回调，防止键位映射被改坏
-      - name: 鼠标钩子逻辑冒烟测试
-        shell: powershell
+      - name: Run English UI localization smoke test
+        run: npm run test:ui:en
+
+      - name: Static syntax check
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path src, build, scripts, tools -Filter *.js -Recurse
+          foreach ($f in $files) {
+            node -c $f.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Write-Host "Syntax check passed for $($files.Count) JS files."
+
+      - name: Validate packaging configuration & portable build
+        if: matrix.node == 22
+        run: npm run pack
+
+      - name: Mouse hook logic smoke test
+        shell: pwsh
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           $out = & .\test\pointer-hook-logic.ps1

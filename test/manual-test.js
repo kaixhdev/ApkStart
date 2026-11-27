@@ -38,16 +38,16 @@ test('每个主题的锚点都存在于随包 HTML', () => {
   }
 });
 
-test('手册正文包含 0.6.4 版本号与声音章节', () => {
-  assert(html.includes('v0.6.4'), '手册应标注 v0.6.4');
-  assert(html.includes('应用没有声音'), '手册应有声音排障章节');
-  assert(html.includes('内置使用手册与自动教程'), '手册应说明自动教程');
+test('Manual body includes v0.6.4 and audio troubleshooting section', () => {
+  assert(html.includes('v0.6.4'), 'Manual should state v0.6.4');
+  assert(html.includes('App Has No Sound'), 'Manual should include audio troubleshooting section');
+  assert(html.includes('Built-in Manual &amp; Auto-Guides'), 'Manual should explain auto-guides');
 });
 
-test('手册有 6.8 商店版 DLL 加载失败章节，且纠正一刀切误判', () => {
-  assert(html.includes('商店版启动失败'), '手册应有 6.8 章节');
-  assert(/不等于.*VC\+\+|不等于.*运行库|不等于.*杀毒/.test(html.replace(/<[^>]+>/g, '')),
-    '6.8 应明确 0xC0000135 不等于一定缺 VC++');
+test('Manual has 6.8 Store build DLL load failed section and avoids single-cause misattribution', () => {
+  assert(html.includes('Microsoft Store Build Fails to Start'), 'Manual should have section 6.8');
+  assert(/three common causes|only reinstall VC\+\+/i.test(html.replace(/<[^>]+>/g, '')),
+    '6.8 should explain 0xC0000135 has multiple causes');
 });
 
 console.log('\n[内置手册 · 自动检测问题 → 章节]');
@@ -164,12 +164,12 @@ test('诊断条目带教程按钮', () => {
   assert(/class="ec-help"/.test(js), '自检条目缺少教程按钮');
 });
 
-test('0xC0000135 不再被一刀切成杀毒删 DLL / 缺 VC++', () => {
+test('0xC0000135 is no longer hardcoded as antivirus/VC++', () => {
   const doctor = fs.readFileSync(path.join(ROOT, 'src', 'core', 'doctor.js'), 'utf8');
   const emu = fs.readFileSync(path.join(ROOT, 'src', 'core', 'emulator.js'), 'utf8');
-  assert(!/title: '运行时组件被杀毒软件删除或缺少 VC\+\+ 运行库'/.test(doctor), 'doctor 仍在静态归因杀毒/VC++');
-  assert(!/缺少 DLL（VC\+\+ 运行库 \/ 运行时组件被杀毒删除）/.test(emu), 'emulator 退出码描述仍在一刀切');
-  assert(/原因待查/.test(emu) && /具体原因待定位/.test(doctor), '应标明原因待定位');
+  assert(!/title: '运行时组件被杀毒软件删除或缺少 VC\+\+ 运行库'/.test(doctor), 'doctor still hardcodes AV/VC++');
+  assert(!/缺少 DLL（VC\+\+ 运行库 \/ 运行时组件被杀毒删除）/.test(emu), 'emulator still hardcodes AV/VC++');
+  assert(/Built-in Manual 6\.8/.test(emu) && /cause pending identification/.test(doctor), 'should state cause pending identification');
 });
 
 console.log(`\n内置手册测试：${passed} 通过，${failed} 失败\n`);

@@ -1,64 +1,58 @@
-# 贡献指南
+# Contributing Guide
 
-欢迎提交 Issue 和 Pull Request。这个项目的原则是**壳层零依赖、行为可预测**，所以请先读一下下面的约定。
+Issues and Pull Requests are welcome. This project follows a **zero-dependency shell, predictable behavior** philosophy—please review the guidelines below before contributing.
 
-## 开发环境
+## Development Environment
 
 - Windows 10/11 x64
-- Node.js ≥ 20
+- Node.js >= 20
 - `npm install && npm start`
 
-## 提交前自检
+## Pre-Submission Checks
 
 ```powershell
-npm test          # 纯 Node 单元测试 + 引擎链路测试（不需要网络、不需要虚拟机）
+npm test          # Pure Node unit tests + engine pipeline tests (no network or VM required)
 ```
 
-涉及界面改动时，建议再跑一次冒烟截图确认没有布局塌陷：
+For UI changes, run a smoke screenshot to verify layout integrity:
 
 ```powershell
 electron . --smoke test\shot.png
 ```
 
-## 代码约定
+## Code Conventions
 
-- **壳层不引入第三方运行时依赖**。`src/core/` 下的 ZIP / AXML / ARSC / PNG / ICO 解析都是手写的，
-  新增功能时优先考虑「能不能用 Node 内置模块写完」，避免为了小功能拉进一个大包。
-- 渲染层是原生 HTML/CSS/JS，不使用前端框架。
-- 与安卓侧交互一律走 `src/core/adb.js`，不要在各处直接拼 adb 命令。
-- 主进程与渲染进程之间只通过 `preload.js` 暴露的白名单通道通信，保持 `contextIsolation` 开启。
-- 注释与 UI 文案使用中文，标识符使用英文。
-- **界面本地化（i18n）**：源码里的界面文案继续写中文；英文译文集中放在 `src/i18n/en.json`，
-  key 就是中文原文。只翻译**显示层**，不要让译文参与逻辑判断：
-  - 新增/修改界面文案后运行 `npm run i18n:extract` 补齐 key，再填译文；
-  - `npm run i18n:check` 会校验缺失条目、占位符对应关系和词典格式，CI 也会跑；
-  - adb/emulator 命令、日志解析正则、包名、路径、配置键、IPC 通道**不要**放进词典；
-  - 带插值的文案用 `{name}` / `{0}` 占位符，译文里的占位符必须与原文一一对应；
-  - 语言设置默认 `auto`（中文系统中文，其它系统英文），老用户升级保持中文；
-  - 双语 UI 冒烟：`npm run test:ui:en`（需要 Electron 二进制，纯 Node 的 `npm test` 不跑）；
-  - 内置手册目前仍是中文，后续可以单独提交手册翻译。
+- **Zero third-party runtime dependencies in the shell**. Parsers under `src/core/` (ZIP, AXML, ARSC, PNG, ICO) are hand-written; prefer Node built-in modules for new features.
+- The renderer uses vanilla HTML/CSS/JS with no frontend framework.
+- All Android interactions go through `src/core/adb.js`—do not assemble raw `adb` commands elsewhere.
+- Main and renderer communicate exclusively through the allowlisted `preload.js` bridge with `contextIsolation` enabled.
+- Comments, UI strings, and identifiers should be written in English.
+- **UI Localization (i18n)**: English is the source and default language; translations live in `src/i18n/<lang>.json` keyed by English source text and applied only at the display boundary:
+  - `npm run i18n:check` validates dictionary formatting and placeholder parity (also runs in CI);
+  - Never pass `adb`/`emulator` commands, log-parsing regexes, package names, paths, config keys, or IPC channels through i18n;
+  - Use `{name}` / `{0}` placeholders for interpolated strings and keep placeholders identical across translations.
 
-## 测试约定
+## Testing Conventions
 
-- 拿不到真实 APK 时测试会自动跳过 APK 解析部分；要覆盖这部分，设置环境变量指向任意 APK：
+- Tests automatically skip real APK parsing when no APK fixture is available; to cover it, set:
 
 ```powershell
 $env:APKSTART_TEST_APK="C:\path\to\any.apk"; npm test
 ```
 
-- 不要在测试里访问外网。需要网络行为的测试请起本地 `http` 服务（参考 `test/engine-test.js`）。
+- Do not access the external internet in unit tests. Spin up a local `http` server for network tests (see `test/engine-test.js`).
 
-## 提交信息
+## Commit Messages
 
-使用 Conventional Commits 风格，例如：
+Follow Conventional Commits style, for example:
 
 ```
-feat(engine): 支持从自定义路径导入 qcow2 磁盘
-fix(axml): 修正属性表基址偏移
-docs: 补充 WHPX 开启说明
+feat(engine): support importing qcow2 disk from custom path
+fix(axml): correct attribute table base offset
+docs: add WHPX setup instructions
 ```
 
-## 法律与边界
+## Legal & Boundaries
 
-- 本项目不分发任何安卓系统镜像、QEMU 二进制或 Google 组件，全部由用户本机按需下载。
-- 请勿在仓库中提交商业 APK、破解工具或任何侵犯第三方版权的内容。
+- This repository does not distribute Android system images, QEMU binaries, or Google components; they are downloaded on demand on the user's machine.
+- Do not commit commercial APKs, cracking tools, or any copyrighted third-party content.

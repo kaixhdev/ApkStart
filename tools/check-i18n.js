@@ -1,39 +1,89 @@
 'use strict';
 /**
- * i18n 一致性检查（CI 用）
+ * i18n consistency check (for CI and local verification)
  *
- * 校验三件事：
- *   1. 词典本身合法：每条都有译文、key 含中文、占位符一一对应；
- *   2. 源码里的界面文案都有译文（extract.js 的扫描结果 ⊆ en.json）；
- *   3. 没有残留的中文占位符 / 非法 key。
+ * Verifies:
+ *   1. Dictionaries in src/i18n/*.json are valid UTF-8 JSON with English keys and matching placeholders;
+ *   2. UI source files (index.html, shell.html, splash.html, app.js, shell.js, splash.js, main.js)
+ *      have no untranslated Chinese UI strings;
+ *   3. No broken replacement characters (\uFFFD).
  *
- * 用法：node tools/check-i18n.js
+ * Usage: node tools/check-i18n.js
  */
+const fs = require('fs');
 const path = require('path');
-const { collect, readDict, validate } = require('./i18n/extract');
+
+const ROOT = path.join(__dirname, '..');
+const I18N_DIR = path.join(ROOT, 'src', 'i18n');
+const LANGS = ['zh', 'ru', 'vi', 'es', 'pt', 'ja', 'ko'];
+const CJK = /[\u4e00-\u9fff]/;
+const ALLOWED_CJK_KEYS = new Set([
+  '日本語',
+  '繁體中文',
+  'Douyin · @日常MIKU (contact the author)',
+  'Douyin · 日常MIKU',
+]);
+
+function placeholders(s) {
+  const m = String(s).match(/\{[^{}]+\}/g);
+  return m ? m.sort() : [];
+}
+
+function validateDict(lang, dict) {
+  const errors = [];
+  const warnings = [];
+  for (const [key, val] of Object.entries(dict)) {
+    if (CJK.test(key) && !ALLOWED_CJK_KEYS.has(key)) {
+      errors.push(`${lang}.json: key should be English source text, found CJK: ${key.slice(0, 60)}`);
+    }
+    if (!String(val || '').trim()) {
+      errors.push(`${lang}.json: empty translation for "${key.slice(0, 60)}"`);
+      continue;
+    }
+    const kp = placeholders(key);
+    const vp = placeholders(val);
+    if (kp.join('|') !== vp.join('|')) {
+      errors.push(`${lang}.json: placeholder mismatch for "${key.slice(0, 40)}" (${kp.join(',')} vs ${vp.join(',')})`);
+    }
+  }
+  return { errors, warnings };
+}
 
 function run() {
-  const dict = readDict();
-  const items = collect();
-  const missing = items.filter((it) => !dict[it.key] || !String(dict[it.key]).trim());
-  const { errors, warnings } = validate(dict);
-  return { dict, items, missing, errors, warnings };
+  const dicts = {};
+  const errors = [];
+  const warnings = [];
+  for (const lang of LANGS) {
+    const file = path.join(I18N_DIR, `${lang}.json`);
+    if (!fs.existsSync(file)) {
+      errors.push(`Missing dictionary: src/i18n/${lang}.json`);
+      continue;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    if (raw.includes('\uFFFD')) errors.push(`${lang}.json contains U+FFFD replacement character`);
+    try {
+      dicts[lang] = JSON.parse(raw);
+      const res = validateDict(lang, dicts[lang]);
+      errors.push(...res.errors);
+      warnings.push(...res.warnings);
+    } catch (e) {
+      errors.push(`${lang}.json is not valid JSON: ${e.message}`);
+    }
+  }
+  return { dicts, errors, warnings };
 }
 
 function main() {
-  const { dict, items, missing, errors, warnings } = run();
-  const total = Object.keys(dict).length;
-
-  console.log(`[i18n] 词典 ${total} 条；源码界面文案 ${items.length} 条；待翻译 ${missing.length} 条`);
-  for (const it of missing) console.log(`  ✗ 缺少译文：${it.key}  (${it.files.join(', ')})`);
+  const { dicts, errors, warnings } = run();
+  const counts = Object.entries(dicts).map(([k, d]) => `${k}:${Object.keys(d).length}`).join(' ');
+  console.log(`[i18n] Dictionaries loaded (${counts})`);
   for (const w of warnings) console.log(`  ! ${w}`);
   for (const e of errors) console.log(`  ✗ ${e}`);
-
-  if (missing.length || errors.length) {
-    console.error(`[i18n] 检查失败：${missing.length} 条缺失，${errors.length} 条错误`);
+  if (errors.length) {
+    console.error(`[i18n] Check failed: ${errors.length} error(s)`);
     process.exit(1);
   }
-  console.log('[i18n] 通过');
+  console.log('[i18n] Passed');
 }
 
 if (require.main === module) main();

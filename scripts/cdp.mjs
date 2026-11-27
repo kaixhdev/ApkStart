@@ -39,7 +39,7 @@ async function pickTarget(match) {
   const all = await listTargets();
   if (!match) return all[0];
   const t = all.find((x) => (x.url || '').includes(match) || (x.title || '').includes(match));
-  if (!t) throw new Error(`未找到匹配标签: ${match}\n可用:\n${all.map((x) => `  ${x.url}`).join('\n')}`);
+  if (!t) throw new Error(`No matching target found: ${match}\nAvailable:\n${all.map((x) => `  ${x.url}`).join('\n')}`);
   return t;
 }
 
@@ -103,7 +103,7 @@ async function attach(target) {
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     ws.onopen = resolve;
-    ws.onerror = (e) => reject(new Error('WebSocket 连接失败: ' + (e?.message || '')));
+    ws.onerror = (e) => reject(new Error('WebSocket connection failed: ' + (e?.message || '')));
   });
   return new Cdp(ws);
 }
@@ -164,7 +164,7 @@ async function main() {
     console.log('files set:', args.slice(2).length);
     return;
   }
-  throw new Error(`未知命令: ${cmd}`);
+  throw new Error(`Unknown command: ${cmd}`);
 }
 
 main()

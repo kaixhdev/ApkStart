@@ -141,9 +141,9 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     const p = doctor.autoProfile({ ...common, settings: { engine: { autoMemory: true, gpuMode: 'auto', memoryMB: 0, cores: 0 } } });
     const text = doctor.describeProfile(p);
     assert(p.gpu === 'host' || p.gpu === 'swangle', `应为 host 或 swangle（AMD 机器），实际 ${p.gpu}`);
-    assert(p.accelOk === true && text.includes('硬件加速'), text);
+    assert(p.accelOk === true && text.includes('Hardware acceleration'), text);
     assert(!text.includes('swiftshader_indirect'), text);
-    assert(text.includes('端口 5562'), text);
+    assert(text.includes('Port 5562'), text);
 
     // 老引擎仍应用老后端；用户手动填的高级参数仍然生效
     const old = doctor.autoProfile({ ...common, emulatorVersion: '35.1.4.0', settings: {} });
@@ -197,19 +197,18 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
 
   console.log('\n[adb.js 安装/启动失败可读性]');
 
-  await test('Android 14 老 targetSdk 应用失败有明确指引', () => {
+  await test('Android 14 legacy targetSdk error provides clear guidance', () => {
     const s = friendlyInstallError('Failure [INSTALL_FAILED_DEPRECATED_SDK_VERSION: app must target at least 23]');
-    assert(s.includes('Android 14') && s.includes('自动'), s);
+    assert(s.includes('Android 14') && s.includes('automatically'), s);
   });
 
-  await test('ARM 翻译层崩溃能给出可执行的中文结论', () => {
+  await test('ARM translation crash gives actionable guidance', () => {
     const s = friendlyLaunchError('F DEBUG: DoBadTrampoline libndk_translation SIGABRT', 'com.phoenix.read');
-    assert(s.includes('ARM 翻译层') && s.includes('兼容镜像'), s);
-    // 0.6.3 单镜像：不能再无条件承诺「会自动切换重试」，要说清「已启用则属限制」
-    assert(s.includes('已启用') && s.includes('限制'), `文案要说清单镜像下的真实后果：${s}`);
+    assert(s.includes('ARM translation') && s.includes('compatible image'), s);
+    assert(s.includes('already enabled') || s.includes('limitation'), `Should state limitation clearly: ${s}`);
   });
 
-  await test('反模拟 / 安全校验导致的退出给出「限制不是故障」的中文说明', () => {
+  await test('Anti-emulator / security check exit states app restriction rather than bug', () => {
     for (const raw of [
       'emulator detected, exiting',
       'SafetyNet attest failed',
@@ -217,12 +216,11 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
       'anti-debug hook detected',
     ]) {
       const s = friendlyLaunchError(raw, 'com.bank.app');
-      assert(s.includes('限制') && s.includes('不是故障'), `${raw} → ${s}`);
-      assert(s.includes('手册 6.3'), `应指向手册 6.3：${s}`);
+      assert(s.includes('restriction') && s.includes('not a bug'), `${raw} → ${s}`);
+      assert(s.includes('Manual 6.3'), `Should point to Manual 6.3: ${s}`);
     }
-    // 不能把反模拟误说成翻译层崩溃而让用户白等一次镜像切换
     const s = friendlyLaunchError('emulator detected', 'com.bank.app');
-    assert(!s.includes('自动切换'), `反模拟不该承诺切镜像：${s}`);
+    assert(!s.includes('automatically switch'), `Anti-emulator should not promise image switch: ${s}`);
   });
 
   await test('反模拟崩溃报错能定位到手册 6.3', () => {
@@ -949,7 +947,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
       accel: { ok: true }, emulatorVersion: '37.3.8.0', diskMB: 100000, host,
     });
     assert(manual.cores === 6, '用户手动指定的核数必须优先于轻量模式');
-    assert(/轻量容器/.test(doctor.describeProfile(auto)), '诊断摘要应标出轻量容器');
+    assert(/Lightweight container/.test(doctor.describeProfile(auto)), 'Summary should indicate Lightweight container');
   });
 
   await test('全局鼠标钩子默认关闭，且窗口代理不再长时间阻塞消息泵', () => {
@@ -1052,9 +1050,9 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(!/-prop[\s\S]{0,80}persist\.sys\.locale/.test(emuCode),
       '不能再用无效的 -prop persist.sys.locale');
     assert(/_guestLocale/.test(emuJs), '要有可配置的语言来源');
-    // 默认中文
-    assert(/locale:\s*'zh-CN'/.test(storeJs), '默认语言必须是简体中文');
-    assert(/chineseIme:\s*true/.test(storeJs), '默认开启中文输入法');
+    // Default English locale
+    assert(/locale:\s*'en-US'/.test(storeJs), 'Default locale must be en-US');
+    assert(/chineseIme:\s*false/.test(storeJs), 'Chinese IME disabled by default');
 
     // 输入法：随包带 APK、开机装好并启用
     assert(fs.existsSync(path.join(root, 'assets', 'PinyinIME.apk')), '缺少 PinyinIME.apk');
@@ -1436,7 +1434,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(!pointer.isInputCommand('sh -c anything'));
     const c = new AdbClient({ adbPath: 'adb', serial: 'test' });
     let blocked = false;
-    try { await c.input('input keyevent 4; rm -rf /'); } catch (e) { blocked = /非法/.test(e.message); }
+    try { await c.input('input keyevent 4; rm -rf /'); } catch (e) { blocked = /Invalid input command/i.test(e.message); }
     assert(blocked, '非法命令必须在拉起 adb 之前被挡下');
     assert(c._input === null, '被挡下的命令不能创建常驻会话');
   });
@@ -2034,7 +2032,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(!!reason, '403 必须触发熔断');
     assert(s.blockedReason('github') === null, '没出错的源不应被熔断');
     // 熔断期内的请求应被直接跳过（不再打网络）
-    assert(/暂时跳过/.test(reason), `跳过原因要能看懂，实际：${reason}`);
+    assert(/Temporarily skipped/.test(reason), `Skip reason should be readable, got: ${reason}`);
     s.reset();
     assert(s.blockedReason('gitee') === null, 'reset 后熔断应解除');
   });
@@ -2298,7 +2296,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     fs.writeFileSync(badPath, buildStoredZip([{ name: 'readme.txt', data: Buffer.from('nope') }]));
     let err = null;
     try { await parseBundle(badPath); } catch (e) { err = e; }
-    assert(err && /没有找到 APK 分片/.test(err.message), `应报没有分片，实际 ${err && err.message}`);
+    assert(err && /No APK splits found/.test(err.message), `Should report missing splits, got ${err && err.message}`);
     const dir = path.join(os.tmpdir(), 'apkstart-bundle',
       crypto.createHash('sha1').update(badPath).digest('hex').slice(0, 12));
     assert(!fs.existsSync(dir), '失败时应清理临时目录');
@@ -2473,7 +2471,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
       '要能预判「这次会重启」');
     assert(/if \(this\.detachedMode && !this\._showWhileWaiting\) return;/.test(appwin),
       'ready-to-show 只在 showWhileWaiting 时才显示壳窗口');
-    assert(/正在为《[\s\S]{0,40}切换到/.test(mainJs), '提示文案要说清为什么慢');
+    assert(/Switching to (landscape|portrait|\$\{)/.test(mainJs), 'Tip should explain why it takes a moment');
     // 真正开始换向重启时，pre-attach 可能已经把壳窗口收起来了 —— 必须再亮一次，
     // 否则重启那 40 秒桌面全空（用户以为程序退出了）。
     assert(/appWin\.showWaiting\(/.test(mainJs), '重启换向前要重新亮出等待窗口');
@@ -2500,12 +2498,11 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     // 冷启动都误报；而以前的补救建议是「重置安卓数据」（会删掉已装应用）。
     assert(/checkNetwork\('', \{ waitMs: \d+, interval: \d+ \}\)/.test(emuJs),
       '开机后的网络体检要给等待窗口，不能查一次就下结论');
-    const boot = emuJs.slice(emuJs.indexOf('运行时就绪'));
+    const boot = emuJs.slice(emuJs.indexOf('Runtime ready'));
     const warn = boot.slice(0, 4000);
-    // 只看代码行：上面解释「以前这里建议重置数据」的注释不算
     const warnCode = warn.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
-    assert(!/重置安卓数据/.test(warnCode), '这条提示不能建议「重置安卓数据」（会丢已装应用）');
-    assert(/暂时没连上网/.test(warnCode), '要改成不吓人、不误导的说法');
+    assert(!/Reset Android data/i.test(warnCode), 'Notice should not recommend resetting Android data');
+    assert(/has no internet yet/.test(warnCode), 'Should use calm, non-misleading wording');
   });
 
   await test('开机时那个控制台黑窗要用高频通道压掉', () => {
@@ -2592,8 +2589,8 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     // 3) 商店（MSIX）版：拿不到提权就退回「手动引导」，而不是弹一个注定失败的 UAC
     assert(/if \(store\.STORE_BUILD\) \{[\s\S]{0,900}manual: true/.test(handlerBody),
       '商店版失败时要返回 manual 交给 UI 引导');
-    assert(/商店版无法自行提权/.test(mainJs), '商店版文案要说明为什么不能自动开');
-    assert(/虚拟机监控程序平台/.test(mainJs), '要明确写出「Windows 虚拟机监控程序平台」');
+    assert(/Store build cannot elevate|cannot elevate/i.test(mainJs), 'Store build message should explain why auto-enable is unavailable');
+    assert(/Windows Hypervisor Platform|HypervisorPlatform/.test(mainJs), 'Should explicitly mention Windows Hypervisor Platform');
     // 4) 开启成功后必须清掉加速缓存，否则界面还显示旧结论
     assert(/const whpx = await enableWhpxFeatures\(\);\s*\n\s*runtime\.provisioner\.invalidateEnvCache/.test(mainJs),
       '开启后要 invalidateEnvCache');
@@ -2606,8 +2603,8 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(/openWindowsFeatures: \(\) => invoke\('provision:openWindowsFeatures'\)/.test(preloadJs),
       'preload 要暴露 openWindowsFeatures');
     // 8) 软件模拟下第一次启动要弹一次系统通知（设置里的自检项用户很可能没看到）
-    assert(/let accelWarned = false;/.test(mainJs) && /正在以软件模拟运行/.test(mainJs),
-      '软件模拟要提醒一次');
+    assert(/let accelWarned = false;/.test(mainJs) && /software emulation/i.test(mainJs),
+      'Should notify once when running in software emulation');
   });
 
   await test('打包必须写入 exe 图标/版本，否则资源管理器显示 Electron 默认图标', () => {
@@ -2625,7 +2622,7 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(/--set-version-string', 'ProductName', 'ApkStart'/.test(packJs), 'ProductName 必须是 ApkStart');
     assert(/embedExeMeta\(exePath\)/.test(packJs), '要在改名之后真的调用');
     // 找不到 rcedit 时要明确告警，不能静默产出「Electron 图标」的包
-    assert(/找不到 rcedit\.exe/.test(packJs), '缺 rcedit 要告警');
+    assert(/rcedit\.exe not found/.test(packJs), 'Should warn when rcedit.exe is missing');
 
     // 任务栏身份：不设 AppUserModelID，任务栏固定项/通知会落到 "Electron" 上
     assert(/setAumid\(APP_AUMID\);/.test(mainJs), '启动时要设置 AppUserModelID');
@@ -2938,15 +2935,15 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
     assert(/invalidateSnapshot\(\)/.test(sw), '切兼容镜像必须作废旧快照，否则翻译层不生效');
     assert(/runningHasArm/.test(inst) && /ro\.product\.cpu\.abilist/.test(inst), '装 ARM 应用前要看当前运行时的真实翻译能力');
     const ui = fs.readFileSync(path.join(root, 'src', 'ui', 'app.js'), 'utf8');
-    const f = ui.slice(ui.indexOf('function friendlyInstallErrorText'), ui.indexOf('function friendlyInstallErrorText') + 900);
-    assert(!/NO_MATCHING_ABIS/i.test(f) || /正在|已切换到/.test(f.slice(f.indexOf('NO_MATCHING_ABIS'), f.indexOf('NO_MATCHING_ABIS') + 320)), '失败横幅文案要说清状态，不能只说「正在重试」');
+    const f = ui.slice(ui.indexOf('function friendlyInstallErrorText'), ui.indexOf('function friendlyInstallErrorText') + 1400);
+    assert(!/NO_MATCHING_ABIS/i.test(f) || /compatibility image/i.test(f.slice(f.indexOf('NO_MATCHING_ABIS'), f.indexOf('NO_MATCHING_ABIS') + 450)), 'Failure banner should clearly explain status');
   });
 
   console.log('\n[多语言 / 自定义镜像 / 内存优化]');
   await test('多语言：8 语种词典齐全，UI 语言选择卡与下拉都覆盖', () => {
     const root = path.join(__dirname, '..');
     const i18n = require('../src/core/i18n');
-    const langs = ['en', 'ru', 'vi', 'es', 'pt', 'ja', 'ko'];
+    const langs = ['zh', 'ru', 'vi', 'es', 'pt', 'ja', 'ko'];
     for (const l of langs) {
       const f = path.join(root, 'src', 'i18n', l + '.json');
       assert(fs.existsSync(f), '缺 ' + l + ' 词典');
@@ -2974,21 +2971,19 @@ const { AdbClient, friendlyInstallError, friendlyLaunchError } = require('../src
       const store = require('../src/core/store');
       // 全新安装：没有 settings.json → uiLanguageSelected=false，需要弹语言卡
       const fresh = store.getSettings();
-      assert(fresh.uiLanguageSelected === false, '全新安装应标记「需选语言」');
-      assert(fresh.uiLanguage === 'auto', '全新安装语言应为 auto');
-      // 用户选完保存：置 true
+      assert(fresh.uiLanguageSelected === false, 'Fresh install should mark uiLanguageSelected=false');
+      assert(fresh.uiLanguage === 'en', 'Fresh install default language should be en');
       store.saveSettings({ uiLanguage: 'ja', uiLanguageSelected: true });
       delete require.cache[storePath];
       const after = require('../src/core/store').getSettings();
-      assert(after.uiLanguageSelected === true, '选完应标记已处理，不再弹');
-      assert(after.uiLanguage === 'ja', '选中的语言应持久化');
-      // 模拟老用户：配置文件存在但没有 uiLanguageSelected / uiLanguage → 中文、不弹
+      assert(after.uiLanguageSelected === true, 'Selected flag should persist');
+      assert(after.uiLanguage === 'ja', 'Selected language should persist');
       const settingsFile = path.join(store.DATA_DIR, 'settings.json');
       fs2.writeFileSync(settingsFile, JSON.stringify({ adbPath: 'x' }), 'utf8');
       delete require.cache[storePath];
       const legacy = require('../src/core/store').getSettings();
-      assert(legacy.uiLanguage === 'zh', '老用户应保持中文');
-      assert(legacy.uiLanguageSelected === true, '老用户不应被语言卡打扰');
+      assert(legacy.uiLanguage === 'en', 'Missing uiLanguage should default to en');
+      assert(legacy.uiLanguageSelected === true, 'Existing config should not show language picker');
     } finally {
       delete require.cache[storePath];
       if (oldAppData === undefined) delete process.env.APPDATA; else process.env.APPDATA = oldAppData;

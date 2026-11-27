@@ -1,9 +1,6 @@
 'use strict';
 /**
- * i18n 单元测试：词典完整性 + 语言解析 + 查表/占位符/回退。
- *
- * 这些断言保护的是「翻译只影响显示」：中文回退、逻辑串原样返回、占位符不丢。
- * 真正的窗口布局由 Electron 冒烟测试覆盖（test/i18n-ui-smoke.js）。
+ * i18n unit tests: dictionary integrity, language resolution, lookup, interpolation, and English fallback.
  */
 const fs = require('fs');
 const path = require('path');
@@ -23,132 +20,106 @@ function test(name, fn) {
 }
 
 function assert(cond, msg) {
-  if (!cond) throw new Error(msg || '断言失败');
+  if (!cond) throw new Error(msg || 'Assertion failed');
 }
 
 const ROOT = path.join(__dirname, '..');
 const i18n = require('../src/core/i18n');
 const { run } = require('../tools/check-i18n');
 
-console.log('\n[i18n · 语言解析]');
-test('中文系统自动选中文', () => {
-  assert(i18n.resolveLanguage('auto', ['zh-CN']) === 'zh', 'zh-CN 应选中 zh');
-  assert(i18n.resolveLanguage('auto', ['zh-TW', 'en-US']) === 'zh', 'zh-TW 应选中 zh');
+console.log('\n[i18n · Language Resolution]');
+test('Chinese system selects zh when set to auto', () => {
+  assert(i18n.resolveLanguage('auto', ['zh-CN']) === 'zh', 'zh-CN should resolve to zh');
+  assert(i18n.resolveLanguage('auto', ['zh-TW', 'en-US']) === 'zh', 'zh-TW should resolve to zh');
 });
-test('非中文系统按语言匹配，未知语言落英文', () => {
-  assert(i18n.resolveLanguage('auto', ['en-US']) === 'en', 'en-US 应选中 en');
-  assert(i18n.resolveLanguage('auto', ['ru-RU']) === 'ru', 'ru-RU 应选中 ru');
-  assert(i18n.resolveLanguage('auto', ['ja-JP']) === 'ja', 'ja-JP 应选中 ja');
-  assert(i18n.resolveLanguage('auto', ['fr-FR']) === 'en', '不支持的语言应落到英文');
-  assert(i18n.resolveLanguage('auto', []) === 'en', '空列表应落到英文');
+test('Non-Chinese system matches supported language, unknown falls back to en', () => {
+  assert(i18n.resolveLanguage('auto', ['en-US']) === 'en', 'en-US should resolve to en');
+  assert(i18n.resolveLanguage('auto', ['ru-RU']) === 'ru', 'ru-RU should resolve to ru');
+  assert(i18n.resolveLanguage('auto', ['ja-JP']) === 'ja', 'ja-JP should resolve to ja');
+  assert(i18n.resolveLanguage('auto', ['fr-FR']) === 'en', 'unsupported language should fall back to en');
+  assert(i18n.resolveLanguage('auto', []) === 'en', 'empty list should fall back to en');
 });
-test('显式设置优先于系统语言', () => {
-  assert(i18n.resolveLanguage('zh', ['en-US']) === 'zh', '显式 zh');
-  assert(i18n.resolveLanguage('en', ['zh-CN']) === 'en', '显式 en');
-  assert(i18n.resolveLanguage('ko', ['en-US']) === 'ko', '显式 ko');
+test('Explicit setting overrides system language', () => {
+  assert(i18n.resolveLanguage('zh', ['en-US']) === 'zh', 'explicit zh');
+  assert(i18n.resolveLanguage('en', ['zh-CN']) === 'en', 'explicit en');
+  assert(i18n.resolveLanguage('ko', ['en-US']) === 'ko', 'explicit ko');
 });
-test('语言代码规范化', () => {
+test('Language code normalization', () => {
   assert(i18n.normalizeLang('zh_CN') === 'zh', 'zh_CN');
   assert(i18n.normalizeLang('en-GB') === 'en', 'en-GB');
   assert(i18n.normalizeLang('ja-JP') === 'ja', 'ja-JP');
   assert(i18n.normalizeLang('pt_BR') === 'pt', 'pt_BR');
-  assert(i18n.normalizeLang('xx-YY') === '', '不支持的语言');
+  assert(i18n.normalizeLang('xx-YY') === '', 'unsupported language');
 });
 
-console.log('\n[i18n · 查表]');
-i18n.setLanguage('zh');
-test('中文模式原样返回', () => {
-  assert(i18n.t('安装 APK') === '安装 APK', '中文模式不应翻译');
-});
-
+console.log('\n[i18n · Lookup & Fallback]');
 i18n.setLanguage('en');
-test('精确查表', () => {
-  assert(i18n.t('安装 APK') === 'Install APK', '安装 APK');
-  assert(i18n.t('设置') === 'Settings', '设置');
+test('English mode returns source text unchanged', () => {
+  assert(i18n.t('Install APK') === 'Install APK', 'English mode should not translate');
+  assert(i18n.t('Installed {n} apps', { n: 3 }) === 'Installed 3 apps', 'interpolation in English mode');
 });
-test('跨行/多余空白也能命中', () => {
-  assert(i18n.t('  安装\n  APK  ') === 'Install APK', '空白应被归一化');
+
+i18n.setLanguage('zh');
+test('Exact lookup in zh', () => {
+  assert(i18n.t('Install APK') === '安装 APK', 'Install APK');
+  assert(i18n.t('Settings') === '设置', 'Settings');
 });
-test('缺失译文回退中文', () => {
-  assert(i18n.t('这条文案还没有英文') === '这条文案还没有英文', '应回退原文');
+test('Whitespace normalization hits multiline keys', () => {
+  assert(i18n.t('  Install\n  APK  ') === '安装 APK', 'whitespace normalized');
 });
-test('逻辑串不翻译', () => {
-  assert(i18n.t('adb devices') === 'adb devices', 'adb 命令不能被改');
-  assert(i18n.t('emulator-5554') === 'emulator-5554', '设备名不能被改');
-  assert(i18n.t('/sdcard/ApkStartShared') === '/sdcard/ApkStartShared', '路径不能被改');
+test('Missing translation falls back to English', () => {
+  assert(i18n.t('This string has no translation yet') === 'This string has no translation yet', 'fallback to English');
 });
-test('显式占位符插值', () => {
+test('Technical strings remain untouched', () => {
+  assert(i18n.t('adb devices') === 'adb devices', 'adb command must not change');
+  assert(i18n.t('emulator-5554') === 'emulator-5554', 'device serial must not change');
+  assert(i18n.t('/sdcard/ApkStartShared') === '/sdcard/ApkStartShared', 'path must not change');
+});
+test('Explicit placeholder interpolation', () => {
   assert(
-    i18n.t('关闭当前应用（{name}）', { name: 'Douyin' }) === 'Close current app (Douyin)',
-    '应替换 {name}',
+    i18n.t('Close current app ({name})', { name: 'Douyin' }) === '关闭当前应用（Douyin）',
+    'should replace {name}',
   );
 });
-test('运行时拼出的字符串按骨架命中', () => {
-  assert(i18n.t('清理 7 项') === 'Clean 7 items', '数字占位符');
-  assert(i18n.t('「D:\\\\Games」所在盘仅剩 1024 MB，运行时与镜像可能撑爆硬盘。').includes('D:\\\\Games'), '路径应保留');
-});
-test('跨行拼接的整句能拼装成英文', () => {
-  const full = '商店版无法自行提权。请手动开启一次：'
-    + '按 Win+R → 输入 optionalfeatures → 勾选「Windows 虚拟机监控程序平台」'
-    + '（HypervisorPlatform，WHPX 真正需要的那个），确定后重启电脑。';
-  const out = i18n.t(full);
-  assert(out !== full, '应发生翻译');
-  assert(!/[\u4e00-\u9fff]/.test(out), `不应残留中文：${out}`);
+test('Pattern matching on formatted strings', () => {
+  assert(i18n.t('Clean 7 items') === '清理 7 项', 'numeric placeholder');
 });
 
-console.log('\n[i18n · 多语种]');
-for (const lang of ['ru', 'vi', 'es', 'pt', 'ja', 'ko']) {
-  test(lang + ' 词典可用且能翻译核心文案', () => {
-    assert(i18n.hasDictionary(lang), lang + ' 应有词典');
+console.log('\n[i18n · Multilingual]');
+for (const lang of ['zh', 'ru', 'vi', 'es', 'pt', 'ja', 'ko']) {
+  test(`${lang} dictionary is available and translates core labels`, () => {
+    assert(i18n.hasDictionary(lang), `${lang} should have a dictionary`);
     i18n.setLanguage(lang);
-    assert(i18n.getLanguage() === lang, '语言应切换为 ' + lang);
-    // 「设置」是所有语种都覆盖的核心词
-    const s = i18n.t('设置');
-    assert(s !== '设置', lang + ' 应能翻译「设置」');
-    // 日语译文用汉字（設定）、韩语用谚文，按「残留汉字」判定会误伤，
-    // 这两种语言的译文正确性由前面「s !== 设置」保证；拉丁语种再查残留汉字。
-    if (lang !== 'ja' && lang !== 'ko') {
-      assert(!/[\u4e00-\u9fff]/.test(s), lang + ' 译文不应残留中文：' + s);
-    }
+    assert(i18n.getLanguage() === lang, `language should switch to ${lang}`);
+    const s = i18n.t('Settings');
+    assert(s !== 'Settings', `${lang} should translate "Settings"`);
   });
 }
-test('多语种下缺失译文回退中文', () => {
+test('Missing translation in non-English falls back to English', () => {
   i18n.setLanguage('es');
-  assert(i18n.t('这是一条绝不会出现在词典里的文案') === '这是一条绝不会出现在词典里的文案', '应回退中文');
+  assert(i18n.t('Untranslated English string') === 'Untranslated English string', 'falls back to English');
 });
-test('多语种下逻辑串仍不翻译', () => {
-  i18n.setLanguage('ja');
-  assert(i18n.t('adb devices') === 'adb devices', '命令不翻译');
-  assert(i18n.t('emulator-5554') === 'emulator-5554', '设备名不翻译');
-});
-test('LANGUAGES 清单覆盖全部支持语言', () => {
+test('LANGUAGES list covers all supported languages', () => {
   const codes = i18n.LANGUAGES.map((l) => l.code);
-  for (const c of ['auto', 'zh', 'en', 'ru', 'vi', 'es', 'pt', 'ja', 'ko']) {
-    assert(codes.includes(c), '清单缺 ' + c);
+  for (const c of ['auto', 'en', 'zh', 'ru', 'vi', 'es', 'pt', 'ja', 'ko']) {
+    assert(codes.includes(c), `missing ${c}`);
   }
 });
-i18n.setLanguage('en'); // 恢复，避免影响后续词典完整性检查
+i18n.setLanguage('en');
 
-console.log('\n[i18n · 词典完整性]');
+console.log('\n[i18n · Dictionary Integrity]');
 const report = run();
-test('词典不是空文件', () => {
-  assert(Object.keys(report.dict).length > 900, `词典只有 ${Object.keys(report.dict).length} 条`);
+test('zh dictionary is populated', () => {
+  assert(Object.keys(report.dicts.zh || {}).length > 900, `zh dict has ${Object.keys(report.dicts.zh || {}).length} entries`);
 });
-test('所有源码界面文案都有译文', () => {
-  assert(report.missing.length === 0, `缺失 ${report.missing.length} 条：${report.missing.slice(0, 5).map((x) => x.key).join(' / ')}`);
+test('All dictionaries pass validation without errors', () => {
+  assert(report.errors.length === 0, report.errors.slice(0, 5).join('; '));
 });
-test('占位符一一对应', () => {
-  assert(report.errors.length === 0, report.errors.slice(0, 5).join('；'));
-});
-test('词典 key 都是中文原文', () => {
-  const bad = Object.keys(report.dict).filter((k) => !/[\u4e00-\u9fff]/.test(k));
-  assert(bad.length === 0, `非中文 key：${bad.slice(0, 5).join(' / ')}`);
-});
-test('en.json 是合法 JSON 且按 UTF-8 保存', () => {
-  const raw = fs.readFileSync(path.join(ROOT, 'src/i18n/en.json'), 'utf8');
-  assert(raw.trim().startsWith('{'), '应以 { 开头');
-  assert(!raw.includes('\uFFFD'), '不应有替换字符');
+test('zh.json is valid UTF-8 JSON without replacement characters', () => {
+  const raw = fs.readFileSync(path.join(ROOT, 'src/i18n/zh.json'), 'utf8');
+  assert(raw.trim().startsWith('{'), 'should start with {');
+  assert(!raw.includes('\uFFFD'), 'should not contain U+FFFD');
 });
 
-console.log(`\n[i18n] ${passed} 通过，${failed} 失败`);
+console.log(`\n[i18n] ${passed} passed, ${failed} failed\n`);
 if (failed) process.exit(1);

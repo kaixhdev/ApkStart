@@ -1,12 +1,10 @@
 'use strict';
 /**
- * 渲染层 i18n：在 DOM 边界翻译，中文源码保持不动。
+ * Renderer-layer i18n: translates at the DOM boundary using English source strings as keys.
  *
- * 为什么不在每个 textContent 赋值处手写 t()：界面文案分散在 HTML 与 app.js 的
- * 模板字符串里，逐处改会制造巨大的 diff 和冲突面；而「中文原文」本身就是稳定的 key。
- * 这里只改**显示结果**，不参与任何逻辑判断，因此不会出现「翻译了错误文本导致行为变化」。
- *
- * 跳过区域（用户数据 / 日志 / 代码）用 data-i18n-skip 标记，例如应用名、包名、路径。
+ * Only display output is modified; logic checks, paths, package names, and
+ * user data are unaffected. Skip regions (user data / logs / code) are marked
+ * with `data-i18n-skip`.
  */
 (function initI18nDom() {
   const api = (window.apkstart && window.apkstart.i18n)
@@ -22,9 +20,21 @@
   const attrApplied = new WeakMap();
   const reported = new Set();
 
+  const ALLOWED_CJK = new Set([
+    '日本語',
+    '繁體中文',
+    'Douyin · 日常MIKU',
+    'Douyin · @日常MIKU (contact the author)',
+  ]);
+
   function reportMissing(text) {
     if (!api.collect) return;
-    if (!/[\u4e00-\u9fff]/.test(text)) return;
+    const langNow = api.getLanguage ? api.getLanguage() : 'en';
+    if (langNow === 'en') {
+      if (!/[\u4e00-\u9fff]/.test(text) || ALLOWED_CJK.has(text)) return;
+    } else if (!/[A-Za-z]/.test(text)) {
+      return;
+    }
     if (reported.has(text)) return;
     reported.add(text);
     console.warn('[i18n-missing]', text);
@@ -44,16 +54,6 @@
     return { lead, core: s.slice(lead.length, s.length - trail.length), trail };
   }
 
-  /**
-   * 中文列表里常把「：」「，」单独放在 <b>/<code> 之间，这些节点没有汉字，
-   * 不进词典。英文界面下顺手把全角标点换成半角，列表才不会出现「Boot menu：New」。
-   */
-  const PUNCT = { '：': ': ', '，': ', ', '、': ', ', '；': '; ', '。': '. ', '！': '! ', '？': '? ', '（': ' (', '）': ')', '「': '"', '」': '"' };
-  function translatePunctuation(core) {
-    if (!/^[：，、；。！？（）「」]+$/.test(core)) return undefined;
-    return Array.from(core).map((c) => PUNCT[c] || c).join('');
-  }
-
   function translateText(node) {
     if (!node || node.nodeType !== 3) return;
     const parent = node.parentNode;
@@ -67,17 +67,14 @@
       src = value;
       textOrigin.set(node, src);
     } else if (textApplied.has(node) && value !== textApplied.get(node) && value !== src) {
-      // 运行时用新的中文文案覆盖了这个节点：把新文案当作原文重新翻译
+      // Runtime updated this node with new source text: treat it as the new origin
       src = value;
       textOrigin.set(node, src);
     }
 
     const { lead, core, trail } = splitEdge(src);
     if (!core) return;
-    // 所有非中文界面都用半角标点（英文/俄文/越文/日文等），中文保持原样
-    const langNow = api.getLanguage ? api.getLanguage() : 'zh';
-    const punct = langNow !== 'zh' ? translatePunctuation(core) : undefined;
-    const out = punct !== undefined ? punct : api.lookup(core);
+    const out = api.lookup(core);
     if (out === undefined) {
       reportMissing(core);
       if (value !== src) node.nodeValue = src;
@@ -161,16 +158,16 @@
 
   const HTML_LANG = { zh: 'zh-CN', en: 'en', ru: 'ru', vi: 'vi', es: 'es', pt: 'pt-BR', ja: 'ja', ko: 'ko' };
   function setHtmlLang() {
-    const lang = api.getLanguage ? api.getLanguage() : 'zh';
-    document.documentElement.lang = HTML_LANG[lang] || 'zh-CN';
+    const lang = api.getLanguage ? api.getLanguage() : 'en';
+    document.documentElement.lang = HTML_LANG[lang] || 'en';
   }
 
   function start() {
     setHtmlLang();
     retranslateAll();
 
-    // 动态插入的 toast / 列表项 / 弹窗文案也要翻译；写入我们自己的译文时
-    // translateText/Attr 是幂等的（值没变不写），不会形成观察器死循环。
+    // Translate dynamically inserted toasts, list items, and dialogs.
+    // translateText/Attr are idempotent, so writing translated values won't loop.
     const observer = new MutationObserver((records) => {
       for (const rec of records) {
         if (rec.type === 'childList') {
@@ -202,7 +199,7 @@
     t: (s, vars) => api.t(s, vars),
     apply: walk,
     retranslateAll,
-    getLanguage: () => (api.getLanguage ? api.getLanguage() : 'zh'),
+    getLanguage: () => (api.getLanguage ? api.getLanguage() : 'en'),
   };
 
   if (document.readyState === 'loading') {

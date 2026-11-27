@@ -223,19 +223,17 @@ function recommendResources({ totalMB = 0, cores = 0, accelOk = false, vramMB = 
  * 现在 host 崩了有 badGpu 记忆自动降级，swangle 只在「没加速 / 显存极小」时建议。
  */
 function recommendGpu({ vendor = 'unknown', accelOk = false, vramMB = 0 } = {}) {
-  if (!accelOk) return { gpuMode: 'software', why: '没有可用的硬件加速，先用软件渲染保证画面能出来' };
-  if (vendor === 'unknown') return { gpuMode: 'auto', why: '显卡型号读不到，交给自动降级链去试' };
-  if (vramMB > 0 && vramMB < 512) return { gpuMode: 'swangle', why: '显存很小，用 swangle 更稳' };
-  // 有硬件加速、显卡识别得出就走 host（真正调用独显/核显）。显存读不到（0）不再
-  // 当成「显卡弱」——核显共享内存本来就报 0，这正是以前误把核显降到软件的原因。
-  if (vendor === 'nvidia') return { gpuMode: 'host', why: 'NVIDIA 驱动成熟，host 直通通常最快' };
-  if (vendor === 'amd') return { gpuMode: 'host', why: 'AMD 显卡走 host 才能用上硬件加速；若崩溃会自动降级' };
-  if (vendor === 'intel') return { gpuMode: 'host', why: 'Intel 核显走 host 才能用上硬件加速；若崩溃会自动降级' };
-  return { gpuMode: 'auto', why: '交给自动降级链去试' };
+  if (!accelOk) return { gpuMode: 'software', why: 'No hardware acceleration available; using software rendering for compatibility' };
+  if (vendor === 'unknown') return { gpuMode: 'auto', why: 'GPU model unknown; delegating to automatic fallback chain' };
+  if (vramMB > 0 && vramMB < 512) return { gpuMode: 'swangle', why: 'Low VRAM; swangle is more stable' };
+  if (vendor === 'nvidia') return { gpuMode: 'host', why: 'NVIDIA drivers are mature; host passthrough is usually fastest' };
+  if (vendor === 'amd') return { gpuMode: 'host', why: 'AMD GPUs require host mode for hardware acceleration; will fall back automatically on crash' };
+  if (vendor === 'intel') return { gpuMode: 'host', why: 'Intel integrated GPUs require host mode for hardware acceleration; will fall back automatically on crash' };
+  return { gpuMode: 'auto', why: 'Delegating to automatic fallback chain' };
 }
 
 /**
- * 把探测结果翻译成体检报告。
+ * Evaluate probe results into a preflight diagnostic report.
  *
  * @param {object} o { hw, settings, edition } edition: 'store' | 'installer'
  * @returns {{ level:string, items:Array, patch:object|null, driver:object|null, summary:string }}
@@ -249,116 +247,116 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
 
   const add = (item) => items.push(item);
 
-  // ---- 1. CPU 虚拟化（BIOS） ----
+  // ---- 1. CPU Virtualization (BIOS) ----
   if (cpu.vtSupported === false) {
     add({
       key: 'vt-unsupported',
       level: 'bad',
-      title: '这颗 CPU 不支持硬件虚拟化',
-      detail: '只能走软件模拟，速度会慢 5~10 倍。轻量应用还能用，大型游戏不建议。',
+      title: 'This CPU does not support hardware virtualization',
+      detail: 'Only software emulation is available (5-10x slower). Suitable for lightweight apps, not recommended for heavy games.',
       action: null,
     });
   } else if (cpu.vtFirmware === false) {
     add({
       key: 'vt-bios-off',
       level: 'bad',
-      title: 'CPU 虚拟化在 BIOS 里没开',
-      detail: '重启进 BIOS/UEFI，把 Intel VT-x（Intel）或 SVM Mode（AMD）设为 Enabled，保存后回来重新体检。'
-        + '联想/戴尔/华硕一般在 Advanced → CPU Configuration 里；品牌机可能叫 Virtualization Technology。',
-      action: { kind: 'manual', id: 'bios', label: '需要重启进 BIOS，无法自动完成' },
+      title: 'CPU virtualization is disabled in BIOS',
+      detail: 'Reboot into BIOS/UEFI, enable Intel VT-x (Intel) or SVM Mode (AMD), save, and re-run this check. '
+        + 'On Lenovo/Dell/ASUS this is usually under Advanced → CPU Configuration (or Virtualization Technology).',
+      action: { kind: 'manual', id: 'bios', label: 'Requires reboot into BIOS (cannot be automated)' },
     });
   } else if (cpu.vtFirmware === true) {
     add({
       key: 'vt-ok',
       level: 'ok',
-      title: 'CPU 虚拟化已在 BIOS 开启',
-      detail: cpu.name ? `${cpu.name} · ${cpu.cores || '?'} 核 / ${cpu.threads || '?'} 线程` : '',
+      title: 'CPU virtualization is enabled in BIOS',
+      detail: cpu.name ? `${cpu.name} · ${cpu.cores || '?'} cores / ${cpu.threads || '?'} threads` : '',
       action: null,
     });
   } else {
     add({
       key: 'vt-unknown',
       level: 'warn',
-      title: '读不到 CPU 虚拟化状态',
-      detail: '可能是主板/权限限制。若启动时提示没有硬件加速，请手动进 BIOS 确认 VT-x / SVM 已开启。',
-      action: { kind: 'manual', id: 'bios', label: '手动确认' },
+      title: 'Unable to read CPU virtualization status',
+      detail: 'This may be due to motherboard or permission restrictions. If startup reports no hardware acceleration, verify VT-x / SVM is enabled in BIOS.',
+      action: { kind: 'manual', id: 'bios', label: 'Verify manually' },
     });
   }
 
-  // ---- 2. Windows 侧：WHPX / Hyper-V ----
+  // ---- 2. Windows: WHPX / Hyper-V ----
   const hp = String(v.hypervisorPlatform || 'unknown');
   const hpxOn = hp === 'enabled' || (hp === 'unknown' && v.winHvApi && v.hypervisorPresent);
   if (hpxOn) {
     add({
       key: 'whpx-ok',
       level: 'ok',
-      title: 'Windows 虚拟机监控程序平台已启用',
+      title: 'Windows Hypervisor Platform is enabled',
       detail: v.hypervisorPresent
-        ? 'Hypervisor 正在运行，WHPX 可用。'
-        : '功能已启用；如果加速仍不可用，重启一次让 Hypervisor 起来。',
+        ? 'Hypervisor is running; WHPX is available.'
+        : 'Feature is enabled; if acceleration is still unavailable, reboot once to start the Hypervisor.',
       action: null,
     });
   } else if (edition === 'store') {
     add({
       key: 'whpx-off',
       level: 'bad',
-      title: '「虚拟机监控程序平台」没有启用',
-      detail: '商店版不能自行改系统功能。按 Win+R → 输入 optionalfeatures → 勾选「Windows 虚拟机监控程序平台」'
-        + '（HypervisorPlatform）与「虚拟机平台」→ 确定 → 重启。',
-      action: { kind: 'elevate', id: 'virtualization', label: '打开「Windows 功能」窗口' },
+      title: '"Windows Hypervisor Platform" is not enabled',
+      detail: 'The Store build cannot modify Windows features automatically. Press Win+R → type optionalfeatures → check "Windows Hypervisor Platform" '
+        + '(HypervisorPlatform) and "Virtual Machine Platform" → OK → Reboot.',
+      action: { kind: 'elevate', id: 'virtualization', label: 'Open "Windows Features"' },
     });
   } else {
     add({
       key: 'whpx-off',
       level: 'bad',
-      title: '「虚拟机监控程序平台」没有启用',
-      detail: '点下面的按钮会自动开启 HypervisorPlatform + VirtualMachinePlatform（需要管理员确认），完成后重启电脑。',
-      action: { kind: 'elevate', id: 'virtualization', label: '一键开启（需管理员）' },
+      title: '"Windows Hypervisor Platform" is not enabled',
+      detail: 'Click the button below to enable HypervisorPlatform + VirtualMachinePlatform (requires administrator confirmation), then reboot your PC.',
+      action: { kind: 'elevate', id: 'virtualization', label: 'Enable now (Admin)' },
     });
   }
 
-  // ---- 3. 硬件加速当前是否真的能用 ----
+  // ---- 3. Hardware acceleration availability ----
   if (v.accelOk) {
     add({
       key: 'accel-ok',
       level: 'ok',
-      title: `硬件加速可用（${v.accelKind === 'aehd' ? 'AEHD' : 'WHPX'}）`,
-      detail: '启动会走硬件加速；下面的配置按这台机器的显卡与内存推荐。',
+      title: `Hardware acceleration available (${v.accelKind === 'aehd' ? 'AEHD' : 'WHPX'})`,
+      detail: 'Startup will use hardware acceleration; the settings below are tailored to this PC\'s GPU and memory.',
       action: null,
     });
   } else {
     add({
       key: 'accel-off',
       level: 'warn',
-      title: '当前没有可用的硬件加速',
+      title: 'No hardware acceleration currently available',
       detail: edition === 'installer' && v.vtFirmware !== false
-        ? '可以装 AEHD 驱动（需管理员），或先开「虚拟机监控程序平台」后重启；两者都不行就只能软件模拟。'
-        : '会先用软件模拟保证能跑；速度比硬件加速慢 5~10 倍。',
+        ? 'You can install the AEHD driver (Admin required), or enable "Windows Hypervisor Platform" and reboot; otherwise software emulation will be used.'
+        : 'Software emulation will be used so apps can still run (5-10x slower than hardware acceleration).',
       action: edition === 'installer' && v.vtFirmware !== false
-        ? { kind: 'elevate', id: 'accel', label: '安装 AEHD 驱动（需管理员）' }
+        ? { kind: 'elevate', id: 'accel', label: 'Install AEHD driver (Admin)' }
         : null,
     });
   }
 
-  // ---- 4. 显卡 ----
+  // ---- 4. GPU ----
   if (!gpu.name) {
     add({
       key: 'gpu-unknown',
       level: 'warn',
-      title: '读不到显卡信息',
-      detail: '可能是远程桌面 / 虚拟机 / 驱动异常。渲染后端交给自动降级链处理。',
+      title: 'Unable to read GPU information',
+      detail: 'This may happen under Remote Desktop, a VM, or driver issues. Rendering backend will use the automatic fallback chain.',
       action: null,
     });
   } else {
     const integrated = /radeon\s+(graphics|vega)|uhd|iris|hd\s+graphics|vega/i.test(gpu.name);
     const vram = gpu.vramMB
-      ? `${(gpu.vramMB / 1024).toFixed(1)} GB 显存${integrated ? '（核显，其余走共享内存）' : ''}`
-      : '显存未知';
+      ? `${(gpu.vramMB / 1024).toFixed(1)} GB VRAM${integrated ? ' (integrated, shared system memory)' : ''}`
+      : 'Unknown VRAM';
     add({
       key: 'gpu-info',
       level: 'ok',
       title: `${gpu.name}`,
-      detail: `${vram}${gpu.driverVersion ? ` · 驱动 ${gpu.driverVersion}` : ''}${gpu.driverDate ? `（${gpu.driverDate}）` : ''}`,
+      detail: `${vram}${gpu.driverVersion ? ` · Driver ${gpu.driverVersion}` : ''}${gpu.driverDate ? ` (${gpu.driverDate})` : ''}`,
       action: null,
     });
     const old = /^(19|20)\d{2}-\d{2}-\d{2}$/.test(gpu.driverDate || '')
@@ -367,30 +365,30 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
       add({
         key: 'gpu-driver-old',
         level: 'warn',
-        title: '显卡驱动比较旧',
-        detail: `驱动日期 ${gpu.driverDate}（约 ${Math.floor(old)} 年前）。老驱动是「起来后黑屏 / 花屏」的常见原因，建议去厂商官网更新。`,
+        title: 'GPU driver is outdated',
+        detail: `Driver date ${gpu.driverDate} (~${Math.floor(old)} years old). Outdated drivers often cause black screens or artifacts; updating from the vendor website is recommended.`,
         action: null,
       });
     }
   }
 
-  // ---- 5. 内存 / 磁盘 / 系统版本 ----
+  // ---- 5. Memory / OS build ----
   const total = Number(mem.totalMB) || 0;
   if (!total) {
-    add({ key: 'mem-unknown', level: 'warn', title: '读不到物理内存', detail: '', action: null });
+    add({ key: 'mem-unknown', level: 'warn', title: 'Unable to read physical memory', detail: '', action: null });
   } else if (total < 6144) {
     add({
       key: 'mem-low',
       level: 'warn',
-      title: `内存偏小（${(total / 1024).toFixed(1)} GB）`,
-      detail: '安卓虚拟机最多只能分 2 GB、2 核，画质降到 540×960，并建议关掉浏览器标签页再开应用。',
+      title: `Low memory (${(total / 1024).toFixed(1)} GB)`,
+      detail: 'Android VM will be capped at 2 GB RAM, 2 cores, and 540×960 resolution. Closing unused browser tabs is recommended.',
       action: null,
     });
   } else {
     add({
       key: 'mem-ok',
       level: 'ok',
-      title: `物理内存 ${(total / 1024).toFixed(0)} GB`,
+      title: `Physical memory ${(total / 1024).toFixed(0)} GB`,
       detail: '',
       action: null,
     });
@@ -401,13 +399,13 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
     add({
       key: 'os-old',
       level: 'warn',
-      title: `Windows 版本较旧（build ${build}）`,
-      detail: 'ApkStart 最低支持 Windows 10 2004（build 19041）。更旧的系统上 emulator 可能直接退出。',
+      title: `Older Windows version (build ${build})`,
+      detail: 'ApkStart requires Windows 10 2004 (build 19041) or later. The emulator may exit immediately on older builds.',
       action: null,
     });
   }
 
-  // ---- 建议配置 ----
+  // ---- Recommended settings ----
   const rec = recommendResources({ totalMB: total, cores: cpu.threads || cpu.cores, accelOk: !!v.accelOk, vramMB: gpu.vramMB });
   const gpuRec = recommendGpu({ vendor: gpu.vendor, accelOk: !!v.accelOk, vramMB: gpu.vramMB });
   const patch = {
@@ -416,21 +414,20 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
       memoryMB: rec.memoryMB,
       cores: rec.cores,
       renderSize: rec.renderSize,
-      // 加速不可用 → 直接锁定软件模拟，省掉两轮白等；可用则交回 auto 让降级链工作
       gpuMode: v.accelOk ? 'auto' : 'software',
       forceTcg: !v.accelOk,
     },
   };
 
-  // 给这台机器生成一份驱动：以后每次开机都按它来，不用重复体检
+  // Generate a hardware profile driver for this machine
   const vendor = gpu.vendor && gpu.vendor !== 'unknown' ? gpu.vendor : 'unknown';
   const driver = {
     format: 'apkstart-driver/1',
     id: `auto-${vendor}-${build || 'x'}`.toLowerCase().replace(/[^a-z0-9._-]/g, '-'),
-    name: `本机自动配置（${gpu.name || vendor}）`,
+    name: `Auto-configured (${gpu.name || vendor})`,
     version: '1.0.0',
-    author: 'ApkStart 体检',
-    description: `由「本机体检 · 自动配置」生成：${gpuRec.why}。${v.accelOk ? '硬件加速可用。' : '当前无硬件加速。'}`,
+    author: 'ApkStart Preflight',
+    description: `Generated by Host Check & Auto-Configure: ${gpuRec.why}. ${v.accelOk ? 'Hardware acceleration available.' : 'No hardware acceleration.'}`,
     priority: 5,
     match: {
       platform: [hw.platform || process.platform],
@@ -449,10 +446,10 @@ function evaluate({ hw = {}, settings = {}, edition = 'installer' } = {}) {
   const warn = items.filter((i) => i.level === 'warn').length;
   const level = bad ? 'bad' : warn ? 'warn' : 'good';
   const summary = bad
-    ? `发现 ${bad} 项必须先处理（${items.filter((i) => i.level === 'bad').map((i) => i.title).join('、')}）`
+    ? `Found ${bad} required issue(s) (${items.filter((i) => i.level === 'bad').map((i) => i.title).join(', ')})`
     : warn
-      ? `有 ${warn} 项建议优化（${items.filter((i) => i.level === 'warn').map((i) => i.title).join('、')}）`
-      : '这台机器可以直接跑硬件加速，配置已经是最优';
+      ? `Found ${warn} recommended optimization(s) (${items.filter((i) => i.level === 'warn').map((i) => i.title).join(', ')})`
+      : 'This PC is ready for hardware acceleration with optimal configuration';
 
   return {
     level,

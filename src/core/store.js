@@ -35,10 +35,10 @@ const APPS_FILE = path.join(DATA_DIR, 'apps.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const DEFAULT_SETTINGS = {
-  // 界面语言：auto = 跟随系统；zh / en / ru / vi / es / pt / ja / ko = 固定。
-  // 老用户升级时若配置里没有这个字段，会迁移成 zh（保持升级前的中文界面）。
-  uiLanguage: 'auto',
-  // 首次语言选择引导是否已处理：全新安装为 false，UI 首次打开弹出选择卡后置 true。
+  // UI language: auto = follow system; en / zh / ru / vi / es / pt / ja / ko = fixed.
+  // Default to 'en' for new installations.
+  uiLanguage: 'en',
+  // Whether the first-run language picker has been shown.
   uiLanguageSelected: true,
   adbPath: '',
   device: '127.0.0.1:5555',
@@ -87,13 +87,13 @@ const DEFAULT_SETTINGS = {
     // 网络加速：给模拟器指定国内公共 DNS。安卓默认的 10.0.2.3 要走主机 DNS，
     // VPN / 公司网 / 某些运营商下解析会拖到几百毫秒，视频类应用首屏会明显发卡。
     fastDns: true,
-    // 系统语言：开机时由 emulator -prop 注入（guest 里 setprop 会被 SELinux 拒绝）。
-    // 默认简体中文。设成 en-US 或 off 就回到镜像原生英文。
-    locale: 'zh-CN',
-    // 中文输入法：随包带 AOSP 谷歌拼音输入法，开机后静默安装并启用。
-    // 系统镜像只带 LatinIME（英文键盘），不装就打不了中文。
-    chineseIme: true,
-    chineseImeDefault: true,
+    // System locale injected via emulator -prop at boot (setprop inside guest is blocked by SELinux).
+    // Default to en-US (image native English). Set to zh-CN or another locale as needed.
+    locale: 'en-US',
+    // Chinese IME: bundled AOSP Google Pinyin IME, silently installed and enabled on boot when enabled.
+    // Disabled by default for English-first installations; can be toggled in Settings.
+    chineseIme: false,
+    chineseImeDefault: false,
     // 快照：quickboot 内存快照让二次启动只要几秒，代价是磁盘上多一份约 2~3GB 的
     // ram.bin。磁盘紧张时可以关掉（只影响启动速度，不影响应用数据）。
     keepSnapshot: true,
@@ -280,20 +280,18 @@ const store = {
     const existing = readJson(SETTINGS_FILE, {});
     const s = deepMerge(DEFAULT_SETTINGS, existing);
     /**
-     * 界面语言迁移：设置文件里没有 uiLanguage 的是老用户，保持他们看到的
-     * 中文界面；全新安装（没有 settings.json）才默认 auto，按系统语言选。
-     * 非法值一律回落到中文，避免手改配置把界面搞成空白。
+     * UI language migration: default to English ('en') when missing or invalid.
      */
     const VALID_LANGS = ['auto', 'zh', 'en', 'ru', 'vi', 'es', 'pt', 'ja', 'ko'];
     const freshInstall = !fs.existsSync(SETTINGS_FILE);
     if (existing.uiLanguage === undefined) {
-      s.uiLanguage = freshInstall ? 'auto' : 'zh';
+      s.uiLanguage = 'en';
     } else if (!VALID_LANGS.includes(s.uiLanguage)) {
-      s.uiLanguage = 'zh';
+      s.uiLanguage = 'en';
     }
     /**
-     * 首次语言选择引导：全新安装且用户还没选过语言时置 false，UI 会在第一次
-     * 打开时弹出语言选择卡。老用户/已选过的保持 true，不重复打扰。
+     * First-run language picker: set to false on fresh installs if not yet selected,
+     * so the UI can show the language picker once. Existing users keep true.
      */
     if (existing.uiLanguageSelected === undefined) {
       s.uiLanguageSelected = freshInstall ? false : true;

@@ -14,14 +14,14 @@ const { app, ipcMain, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const LANG = (process.env.APKSTART_LANG === 'en' || process.argv.includes('--en')) ? 'en' : 'zh';
-// 英文冒烟时默认打开漏翻收集；preload 在渲染进程启动时读这个变量
+const LANG = (process.env.APKSTART_LANG === 'zh' || process.argv.includes('--zh')) ? 'zh' : 'en';
+// Collect leaked untranslated strings during English smoke test
 if (LANG === 'en') process.env.APKSTART_I18N_COLLECT = '1';
 const OUT = path.join(__dirname, 'out', LANG === 'en' ? 'en' : 'zh');
 const UI = path.join(__dirname, '..', 'src', 'ui');
 
 const SETTINGS = {
-  uiLanguage: 'zh', uiLanguageSelected: true,
+  uiLanguage: LANG, uiLanguageSelected: true,
   adbPath: '',
   runtime: { isoPath: '', customSysImgDir: '', sourcePreference: 'auto', autoMirror: true, giteeToken: '', mirrorPrefix: '', downloadConnections: 8 },
   engine: {
@@ -29,7 +29,7 @@ const SETTINGS = {
     prewarm: true, priorityMode: 'balanced', deepTrim: false, mouseRightBack: true,
     mouseWheelMode: 'smooth', mouseSideButtons: false, keymapEnabled: true,
     resourceMode: 'balanced', renderSize: 'auto', dataPartitionGB: 6, fastDns: true,
-    locale: 'zh-CN', chineseIme: true, keepSnapshot: true, logLimitKB: 2048,
+    locale: 'en-US', chineseIme: false, keepSnapshot: true, logLimitKB: 2048,
   },
   display: {
     mode: 'window', portrait: '900x1600', autoFullscreenOnLaunch: false, landscape: false,
@@ -47,22 +47,23 @@ const SETTINGS = {
 };
 
 const DEBUG_ISSUES = [
-  { code: 'device.unauthorized', category: 'device', severity: 'error', title: '安卓设备未授权调试', hint: '重启运行时后会重新弹出确认框。', fix: 'restartRuntime', detail: '' },
-  { code: 'storage.diskLow', category: 'storage', severity: 'warn', title: '运行时所在磁盘空间偏紧', hint: '剩余不足 8 GB。', fix: 'disk', detail: '剩余 5120 MB' },
-  { code: 'settings.orientationConflict', category: 'settings', severity: 'warn', title: '屏幕方向策略与当前面板方向相反', hint: '把面板方向改成与策略一致即可。', fix: 'orientation', detail: '' },
+  { code: 'device.unauthorized', category: 'device', severity: 'error', title: 'Android device is unauthorized for debugging', hint: 'Restarting the runtime will re-trigger the prompt.', fix: 'restartRuntime', detail: '' },
+  { code: 'storage.diskLow', category: 'storage', severity: 'warn', title: 'Low disk space on the runtime drive', hint: 'Less than 8 GB free.', fix: 'disk', detail: '5120 MB free' },
+  { code: 'settings.orientationConflict', category: 'settings', severity: 'warn', title: 'Screen orientation policy conflicts with current panel orientation', hint: 'Align the panel orientation with the policy.', fix: 'orientation', detail: '' },
 ];
 
 const OVERRIDES = {
   'settings:get': () => SETTINGS,
   'settings:set': () => SETTINGS,
-  'app:info': () => ({ version: '0.6.0', isDev: true, dataDir: 'C:\\data', runtimeDir: 'C:\\data\\runtime' }),
+  'app:info': () => ({ version: '0.6.4', isDev: true, dataDir: 'C:\\data', runtimeDir: 'C:\\data\\runtime' }),
   'apps:list': () => [],
   'assoc:status': () => ({ registered: false }),
-  'doctor:profile': () => ({ profile: {}, text: '均衡 · 4 核 / 4 GB / 720p' }),
+  'gpu:status': () => ({ mode: 'auto', supported: true }),
+  'doctor:profile': () => ({ profile: {}, text: 'Balanced · 4 cores / 4 GB / 720p' }),
   'doctor:selfCheck': () => ({ issues: [], accel: { ok: true }, free: 102400 }),
   'doctor:report': () => ({ ok: true, file: 'C:\\report.txt' }),
   'runtime:usage': () => ({ totalText: '8.2 GB', reclaimableText: '1.1 GB', count: 3 }),
-  'runtime:status': () => ({ mode: 'builtin', backend: 'builtin', backendLabel: '内置', installed: true, vmRunning: false, deviceOnline: false, ready: false, phase: 'idle', needsSetup: null, error: '', env: { adb: { ok: true }, emulator: { ok: true }, sysimg: { ok: true } }, accel: { ok: true }, network: null }),
+  'runtime:status': () => ({ mode: 'builtin', backend: 'builtin', backendLabel: 'Built-in', installed: true, vmRunning: false, deviceOnline: false, ready: false, phase: 'idle', needsSetup: null, error: '', env: { adb: { ok: true }, emulator: { ok: true }, sysimg: { ok: true } }, accel: { ok: true }, network: null }),
   'runtime:dataInfo': () => ({ avdDir: 'C:\\data\\avd', configuredGB: 6, actualGB: 6 }),
   'android:status': () => ({ running: false, wifi: true, airplane: false, anim: true, volume: 50, font: 1, density: 320 }),
   'drivers:list': () => ({ drivers: [], errors: [] }),

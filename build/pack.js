@@ -39,25 +39,25 @@ function copy(src, dest) {
   }
 }
 
-console.log(FULL ? '打包完整版（含运行时）→' : '打包便携版 →', OUT);
+console.log(FULL ? 'Packaging full portable build (with runtime) ->' : 'Packaging portable build ->', OUT);
 // 目标已存在时不做整树删除：部分环境会拦截批量删除，且打包中途失败会丢掉
 // 上一个可用版本。改为先把旧目录改名保留，再全新构建；占用中则自动换目录。
 if (fs.existsSync(OUT)) {
   try {
     const backup = `${OUT}.prev-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.renameSync(OUT, backup);
-    console.log('旧版本已保留 →', backup);
+    console.log('Previous build kept at ->', backup);
   } catch (_) {
     // 某些环境（杀软 / 搜索索引 / 资源管理器）会长时间持有目录句柄，
     // 整目录改名必然 EBUSY；这时退到带版本号的目录，产物一样可用且不再重名。
     OUT = path.join(ROOT, 'dist', `ApkStart-v${require(path.join(ROOT, 'package.json')).version}-win64-portable`);
-    console.log('旧目录被占用，改输出到 →', OUT);
+    console.log('Target directory is in use; outputting to ->', OUT);
   }
 }
 fs.mkdirSync(path.join(OUT, 'resources', 'app'), { recursive: true });
 
 // 1. Electron 运行时
-console.log('复制 Electron 运行时…');
+console.log('Copying Electron runtime…');
 copy(ELECTRON_DIST, OUT);
 fs.rmSync(path.join(OUT, 'resources', 'default_app.asar'), { force: true });
 
@@ -101,7 +101,7 @@ for (const rel of ['d3dcompiler_47.dll']) {
 // 2. 应用本体
 // assets/ 里是随包分发的资源：PinyinIME.apk（中文输入法），开机时由
 // Runtime.prepare() 静默装进安卓。漏掉它用户就打不了中文。
-console.log('复制应用…');
+console.log('Copying application…');
 const appDir = path.join(OUT, 'resources', 'app');
 for (const item of ['package.json', 'src', 'assets', 'LICENSE']) {
   const src = path.join(ROOT, item);
@@ -117,7 +117,7 @@ for (const item of ['package.json', 'src', 'assets', 'LICENSE']) {
 // 通常作为 optionalDependency 挂在同 scope 下（如 @napi-rs/lzma-win32-x64-msvc）。
 const prodDeps = Object.keys((require(path.join(ROOT, 'package.json')).dependencies) || {});
 if (prodDeps.length) {
-  console.log(`复制生产依赖（${prodDeps.length}）：${prodDeps.join(', ')}`);
+  console.log(`Copying production dependencies (${prodDeps.length}): ${prodDeps.join(', ')}`);
   const destModules = path.join(appDir, 'node_modules');
   for (const dep of prodDeps) {
     if (dep.startsWith('@')) {
@@ -230,22 +230,22 @@ function embedExeMeta(exe) {
     path.join(ROOT, 'node_modules', 'rcedit', 'bin', 'rcedit-x64.exe'),
   ].find((p) => fs.existsSync(p));
   if (!rcedit) {
-    console.warn('  [!] 找不到 rcedit.exe，exe 图标/版本信息保持 Electron 默认值');
+    console.warn('  [!] rcedit.exe not found; exe icon/version will remain Electron defaults');
     return false;
   }
   const ico = path.join(ROOT, 'src', 'ui', 'assets', 'appicon.ico');
   if (!fs.existsSync(ico)) {
-    console.warn(`  [!] 找不到 ${ico}，跳过图标写入`);
+    console.warn(`  [!] ${ico} not found; skipping icon embedding`);
     return false;
   }
   const args = [
     exe,
     '--set-icon', ico,
-    // 四段式文件版本（和 MSIX 的口径一致），产品版本用三段式
+    // 4-part file version (aligned with MSIX), 3-part product version
     '--set-file-version', `${PKG.version}.0`,
     '--set-product-version', PKG.version,
     '--set-version-string', 'ProductName', 'ApkStart',
-    '--set-version-string', 'FileDescription', 'ApkStart 安卓应用运行器',
+    '--set-version-string', 'FileDescription', 'ApkStart Android App Runner',
     '--set-version-string', 'CompanyName', PKG.author || 'RoutineMiku',
     '--set-version-string', 'LegalCopyright', 'Copyright (c) 2026 ApkStart',
     '--set-version-string', 'OriginalFilename', 'ApkStart.exe',
@@ -253,20 +253,20 @@ function embedExeMeta(exe) {
   ];
   try {
     execFileSync(rcedit, args, { stdio: 'pipe', windowsHide: true });
-    console.log(`  exe 图标/版本已写入（${PKG.version}，FileDescription=ApkStart 安卓应用运行器）`);
+    console.log(`  Embedded exe icon/version (${PKG.version}, FileDescription=ApkStart Android App Runner)`);
     return true;
   } catch (e) {
-    console.warn(`  [!] rcedit 失败：${e.message}`);
+    console.warn(`  [!] rcedit failed: ${e.message}`);
     return false;
   }
 }
 embedExeMeta(exePath);
 
-// 5. 版本信息
+// 5. Version info
 const pkg = PKG;
-const fullNote = FULL ? '完整版（内置运行时，装完不联网）' : '轻量版（首次启动下载运行时）';
+const fullNote = FULL ? 'Full edition (bundled runtime, offline-ready)' : 'Lite edition (downloads runtime on first launch)';
 fs.writeFileSync(path.join(OUT, 'VERSION.txt'),
-  `ApkStart ${pkg.version}\n${fullNote}\n构建时间：${new Date().toLocaleString('zh-CN')}\n`);
+  `ApkStart ${pkg.version}\n${fullNote}\nBuilt: ${new Date().toISOString()}\n`);
 
 // 6. 体积报告：每次打包都打印，避免以后又悄悄变胖
 function dirSize(dir) {
@@ -281,9 +281,9 @@ function dirSize(dir) {
 }
 const totalMB = dirSize(OUT) / 1048576;
 console.log(
-  `完成。整包 ${totalMB.toFixed(0)} MB（语言包省了 ${(localeSaved / 1048576).toFixed(0)} MB，`
-  + `冗余运行库省了 ${(pruneSaved / 1048576).toFixed(1)} MB）。`,
+  `Done. Total ${totalMB.toFixed(0)} MB (locales saved ${(localeSaved / 1048576).toFixed(0)} MB, `
+  + `pruned runtimes saved ${(pruneSaved / 1048576).toFixed(1)} MB).`,
 );
-console.log('压缩：node build/zip.js ' + path.relative(ROOT, OUT) + ' <输出.zip>');
-console.log(`运行 ${path.join(OUT, 'ApkStart.exe')} 即可使用。`);
-if (!FULL) console.log('想要「一次下载、装完不联网」的完整版：node build/pack.js --full');
+console.log('Compress: node build/zip.js ' + path.relative(ROOT, OUT) + ' <output.zip>');
+console.log(`Run ${path.join(OUT, 'ApkStart.exe')} to start.`);
+if (!FULL) console.log('For the offline full edition: node build/pack.js --full');
