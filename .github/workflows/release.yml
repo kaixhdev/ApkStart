@@ -57,12 +57,12 @@ jobs:
           }
           $commit = (git rev-parse HEAD).Trim()
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json
+          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json -AsHashTable
           $ver = $pkg.version
-          $lockRootVer = $lock.packages.''.version
+          $lockRootVer = $lock['packages']['']['version']
 
-          if ($lock.version -ne $ver -or ($lockRootVer -and $lockRootVer -ne $ver)) {
-            Write-Error "package-lock.json version ($($lock.version)) does not match package.json ($ver)."
+          if ($lock['version'] -ne $ver -or ($lockRootVer -and $lockRootVer -ne $ver)) {
+            Write-Error "package-lock.json version ($($lock['version'])) does not match package.json ($ver)."
             exit 1
           }
           $expectedTag = "v$ver"
