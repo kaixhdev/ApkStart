@@ -3,12 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (must match v<package.json version>, e.g. v0.6.4)'
-        required: false
+        description: 'Version tag to build and publish (example: v0.6.4)'
+        required: true
         type: string
 
 permissions:
@@ -22,41 +22,65 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
+      - name: Validate tag format
+        id: pre
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $tag = "${{ inputs.tag }}".Trim()
+          } else {
+            $tag = "${{ github.ref_name }}".Trim()
+          }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            Write-Error "Invalid tag '$tag'. Release tags must follow vMAJOR.MINOR.PATCH (e.g. v0.6.4)."
+            exit 1
+          }
+          Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Trigger event : ${{ github.event_name }}"
+          Write-Host "Selected tag  : $tag"
+
+      - name: Checkout tagged commit
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.pre.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify version synchronization and tag commit
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.pre.outputs.tag }}"
+          git rev-parse --verify "refs/tags/$tag" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Tag '$tag' does not exist in the repository."
+            exit 1
+          }
+          $commit = (git rev-parse HEAD).Trim()
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json
+          $ver = $pkg.version
+          $lockRootVer = $lock.packages.''.version
+
+          if ($lock.version -ne $ver -or ($lockRootVer -and $lockRootVer -ne $ver)) {
+            Write-Error "package-lock.json version ($($lock.version)) does not match package.json ($ver)."
+            exit 1
+          }
+          $expectedTag = "v$ver"
+          if ($tag -ne $expectedTag) {
+            Write-Error "Tag '$tag' does not match package.json version '$expectedTag'."
+            exit 1
+          }
+          Write-Output "version=$ver" >> $env:GITHUB_OUTPUT
+          Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Output "commit=$commit" >> $env:GITHUB_OUTPUT
+          Write-Host "Package version    : $ver"
+          Write-Host "Checked-out commit : $commit"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Verify version synchronization
-        id: ver
-        shell: pwsh
-        run: |
-          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json
-          $ver = $pkg.version
-          if ($lock.version -ne $ver) {
-            Write-Error "package-lock.json version ($($lock.version)) does not match package.json ($ver)"
-            exit 1
-          }
-          $expectedTag = "v$ver"
-          if ("${{ github.event_name }}" -eq "push") {
-            $tag = "${{ github.ref_name }}"
-          } elseif ("${{ inputs.tag }}" -ne "") {
-            $tag = "${{ inputs.tag }}"
-          } else {
-            $tag = $expectedTag
-          }
-          if ($tag -ne $expectedTag) {
-            Write-Error "Release tag '$tag' does not match package.json version '$expectedTag'"
-            exit 1
-          }
-          Write-Output "version=$ver" >> $env:GITHUB_OUTPUT
-          Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
-          Write-Host "Verified release version $ver (tag $tag)"
 
       - name: Install dependencies
         run: npm ci
@@ -127,20 +151,29 @@ jobs:
           tar.exe -a -cf $zip -C "build\runtime" .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Collect artifacts and generate SHA-256 checksums
+      - name: Verify artifacts and generate SHA-256 checksums
         shell: pwsh
         run: |
           $tag = "${{ steps.ver.outputs.tag }}"
           $ver = "${{ steps.ver.outputs.version }}"
-          New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
-          $setup = Get-ChildItem dist/release/*Setup.exe | Select-Object -First 1
-          if (-not $setup) { Write-Error "NSIS Setup.exe not found in dist/release"; exit 1 }
+          $setup = "dist\release\ApkStart-$ver-Setup.exe"
+          $portable = "ApkStart-$tag-win64-portable.zip"
+          $manifest = "ApkStart-v$ver-manifest.json"
+          $appZip = "ApkStart-v$ver-app.zip"
+          $runtimeZip = "ApkStart-runtime-$tag.zip"
 
-          Copy-Item $setup.FullName "release-artifacts\"
-          Copy-Item "ApkStart-$tag-win64-portable.zip" "release-artifacts\"
-          Copy-Item "ApkStart-v$ver-manifest.json" "release-artifacts\"
-          Copy-Item "ApkStart-v$ver-app.zip" "release-artifacts\"
-          Copy-Item "ApkStart-runtime-$tag.zip" "release-artifacts\"
+          $expected = @($setup, $portable, $manifest, $appZip, $runtimeZip)
+          foreach ($f in $expected) {
+            if (-not (Test-Path $f) -or (Get-Item $f).Length -eq 0) {
+              Write-Error "Required release artifact missing or empty: $f"
+              exit 1
+            }
+          }
+
+          New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
+          foreach ($f in $expected) {
+            Copy-Item $f "release-artifacts\"
+          }
 
           Push-Location release-artifacts
           $sums = Get-ChildItem -File | Sort-Object Name | ForEach-Object {
@@ -149,6 +182,8 @@ jobs:
           }
           [System.IO.File]::WriteAllLines("$PWD\SHA256SUMS.txt", $sums)
           Pop-Location
+
+          Write-Host "Generated release artifacts:"
           Get-ChildItem release-artifacts | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,2)}}
 
       - name: Prepare release notes
@@ -158,30 +193,34 @@ jobs:
           $ver = "${{ steps.ver.outputs.version }}"
           $date = (Get-Date -Format "yyyy-MM-dd")
           $notesFile = ".github/release-notes-$tag.md"
+
           $body = @()
           $body += "# ApkStart $tag"
           $body += ""
           $body += "**Release Date:** $date"
+          $body += "**Commit:** ``${{ steps.ver.outputs.commit }}``"
           $body += ""
           if (Test-Path $notesFile) {
-            $body += (Get-Content $notesFile -Raw)
+            $body += (Get-Content $notesFile -Raw).Trim()
             $body += ""
           } elseif (Test-Path "CHANGELOG.md") {
             $changelog = Get-Content "CHANGELOG.md" -Raw
             if ($changelog -match "(?ms)## \[$ver\][^\n]*\n(.*?)(?=\n## \[|\z)") {
+              $body += "## Changes"
               $body += $Matches[1].Trim()
               $body += ""
             }
           }
           $body += "## Windows Installation"
-          $body += "- **Installer (`ApkStart-$ver-Setup.exe`)**: Includes the bundled Android 14 runtime (offline-ready) with Desktop/Start Menu shortcuts and uninstaller."
-          $body += "- **Lite Portable (`ApkStart-$tag-win64-portable.zip`)**: Extract and run; downloads the runtime on first launch."
+          $body += "- **Installer (``ApkStart-$ver-Setup.exe``)**: Full Windows x64 installer with bundled Android 14 runtime (offline-ready), Desktop/Start Menu shortcuts, and uninstaller."
+          $body += "- **Lite Portable (``ApkStart-$tag-win64-portable.zip``)**: Extract and run ``ApkStart.exe``; downloads the Android runtime on first launch."
           $body += ""
           $body += "## Verify Checksums (SHA-256)"
           $body += '```powershell'
-          $body += 'Get-FileHash .\ApkStart-*-Setup.exe -Algorithm SHA256'
+          $body += "Get-FileHash .\ApkStart-$ver-Setup.exe -Algorithm SHA256"
+          $body += "Get-FileHash .\ApkStart-$tag-win64-portable.zip -Algorithm SHA256"
           $body += '```'
-          $body += "Compare the output with `SHA256SUMS.txt`."
+          $body += "Compare with ``SHA256SUMS.txt`` attached to this release."
           [System.IO.File]::WriteAllLines("$PWD\release-notes.md", $body)
 
       - name: Create GitHub Release and upload assets
@@ -192,17 +231,29 @@ jobs:
           $tag = "${{ steps.ver.outputs.tag }}"
           $existing = gh release view $tag --json tagName -q .tagName 2>$null
           if (-not $existing) {
-            gh release create $tag --title "ApkStart $tag" --notes-file release-notes.md --generate-notes
-            if ($LASTEXITCODE -ne 0) { exit 1 }
+            gh release create $tag --title "ApkStart $tag" --notes-file release-notes.md
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Failed to create GitHub Release $tag. Ensure Repository Settings -> Actions -> General -> Workflow permissions is set to 'Read and write permissions'."
+              exit 1
+            }
           } else {
             gh release edit $tag --title "ApkStart $tag" --notes-file release-notes.md
-            if ($LASTEXITCODE -ne 0) { exit 1 }
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Failed to update GitHub Release $tag."
+              exit 1
+            }
           }
+
           $files = (Get-ChildItem release-artifacts -File).FullName
           $ok = $false
           for ($i = 1; $i -le 3 -and -not $ok; $i++) {
             gh release upload $tag @files --clobber
             if ($LASTEXITCODE -eq 0) { $ok = $true } else { Start-Sleep -Seconds 15 }
           }
-          if (-not $ok) { Write-Error "Failed to upload release assets"; exit 1 }
-          gh release view $tag --json assets --jq '.assets[] | "\(.name) (\(.size) bytes)"'
+          if (-not $ok) {
+            Write-Error "Failed to upload release assets after 3 attempts."
+            exit 1
+          }
+
+          Write-Host "Release published successfully:"
+          gh release view $tag --json url,assets --jq '"Release URL: \(.url)\nAssets:\n" + (.assets | map("  - \(.name) (\(.size) bytes)") | join("\n"))'

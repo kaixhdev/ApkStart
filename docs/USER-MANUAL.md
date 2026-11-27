@@ -66,7 +66,7 @@ Emulator window = App window (custom title, real icon, portrait aspect ratio, ce
 
 Both release mirrors carry identical builds:
 
-- GitHub: `github.com/RoutineMiku/apkstart/releases`
+- GitHub: `github.com/kaixhdev/ApkStart/releases`
 - Gitee: `gitee.com/daily-miku/apkstart/releases`
 
 | Edition | Filename | When to Choose |
@@ -457,7 +457,7 @@ When reporting an issue, please attach:
 2. **Last 20 lines of `app.log`**: `%APPDATA%\ApkStart\logs\app.log`;
 3. **Version & Edition**: e.g., "Store 0.6.4" or "Full Portable 0.6.4".
 
-- GitHub: <https://github.com/RoutineMiku/apkstart> (Issues / Releases)
+- GitHub: <https://github.com/kaixhdev/ApkStart> (Issues / Releases)
 - Gitee: <https://gitee.com/daily-miku/apkstart>
 
 ---

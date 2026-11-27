@@ -7,13 +7,13 @@
   "author": "RoutineMiku",
   "license": "MIT",
   "private": true,
-  "homepage": "https://github.com/RoutineMiku/apkstart#readme",
+  "homepage": "https://github.com/kaixhdev/ApkStart#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RoutineMiku/apkstart.git"
+    "url": "git+https://github.com/kaixhdev/ApkStart.git"
   },
   "bugs": {
-    "url": "https://github.com/RoutineMiku/apkstart/issues"
+    "url": "https://github.com/kaixhdev/ApkStart/issues"
   },
   "keywords": [
     "android",

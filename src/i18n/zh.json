@@ -380,7 +380,7 @@
  "General & setup": "常用与安装",
  "Generic compatibility image (managed automatically)": "通用兼容镜像（自动管理）",
  "Get started": "开始使用",
- "Get the latest version from GitHub (RoutineMiku/apkstart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "从 GitHub（RoutineMiku/apkstart）获取最新版本；轻量版会下载便携包并自动替换程序文件， 运行时、已装应用与快照都不受影响。",
+ "Get the latest version from GitHub (kaixhdev/ApkStart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "从 GitHub（kaixhdev/ApkStart）获取最新版本；轻量版会下载便携包并自动替换程序文件， 运行时、已装应用与快照都不受影响。",
  "GitHub only": "只用 GitHub",
  "GitHub runtime unavailable ({0}); switching to the official source…": "GitHub 运行时不可用（{0}），改用官方源…",
  "Gitee only (usually fastest in China)": "只用 Gitee（国内通常最快）",

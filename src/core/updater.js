@@ -23,8 +23,8 @@ const { cmpVer } = require('./version');
 const { Sources } = require('./sources');
 const inc = require('./incremental');
 
-const OWNER = 'RoutineMiku';
-const REPO = 'apkstart';
+const OWNER = 'kaixhdev';
+const REPO = 'ApkStart';
 
 /** PowerShell 单引号字符串：内部的 ' 要写成 '' */
 function psq(s) {

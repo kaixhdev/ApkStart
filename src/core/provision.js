@@ -51,8 +51,8 @@ const SOURCES = {
   // 以前轻量版要从 dl.google.com 分别下 emulator / 系统镜像，国内网络经常
   // 卡在几十 KB/s 甚至直接 404；改成整包 + 本项目 GitHub 之后，下载源和更新源
   // 是同一个地方，出了问题也只需要在一个地方修。
-  ghReleaseApi: 'https://api.github.com/repos/RoutineMiku/apkstart/releases',
-  ghReleasePage: 'https://github.com/RoutineMiku/apkstart/releases',
+  ghReleaseApi: 'https://api.github.com/repos/kaixhdev/ApkStart/releases',
+  ghReleasePage: 'https://github.com/kaixhdev/ApkStart/releases',
   // 同内容的 Gitee 镜像：国内直连 api.github.com 常常几十秒才响应，Gitee 一般几百毫秒。
   // 两边都问一次，谁先给出「带运行时整包的最高版本」就用谁。
   giteeReleaseApi: 'https://gitee.com/api/v5/repos/daily-miku/apkstart/releases',

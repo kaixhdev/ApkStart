@@ -19,22 +19,23 @@ const http = require('http');
 const { URL } = require('url');
 const { cmpVer } = require('./version');
 
-const OWNER_GH = 'RoutineMiku';
+const OWNER_GH = 'kaixhdev';
+const REPO_GH = 'ApkStart';
 const OWNER_GITEE = 'daily-miku';
-const REPO = 'apkstart';
+const REPO_GITEE = 'apkstart';
 
 const SOURCES = {
   github: {
     id: 'github',
     name: 'GitHub',
-    api: `https://api.github.com/repos/${OWNER_GH}/${REPO}`,
-    web: `https://github.com/${OWNER_GH}/${REPO}`,
+    api: `https://api.github.com/repos/${OWNER_GH}/${REPO_GH}`,
+    web: `https://github.com/${OWNER_GH}/${REPO_GH}`,
   },
   gitee: {
     id: 'gitee',
     name: 'Gitee',
-    api: `https://gitee.com/api/v5/repos/${OWNER_GITEE}/${REPO}`,
-    web: `https://gitee.com/${OWNER_GITEE}/${REPO}`,
+    api: `https://gitee.com/api/v5/repos/${OWNER_GITEE}/${REPO_GITEE}`,
+    web: `https://gitee.com/${OWNER_GITEE}/${REPO_GITEE}`,
   },
 };
 

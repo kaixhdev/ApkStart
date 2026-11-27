@@ -316,7 +316,7 @@
  "General & setup": "常用与설치",
  "Generic compatibility image (managed automatically)": "通用兼容이미지 (자동管理)",
  "Get started": "시작使用",
- "Get the latest version from GitHub (RoutineMiku/apkstart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "从 GitHub (RoutineMiku/apkstart)获取最新버전；轻量版会다운로드便携包并자동替换프로그램파일, 런타임、已装앱与스냅샷都不受影响.",
+ "Get the latest version from GitHub (kaixhdev/ApkStart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "从 GitHub (kaixhdev/ApkStart)获取最新버전；轻量版会다운로드便携包并자동替换프로그램파일, 런타임、已装앱与스냅샷都不受影响.",
  "GitHub runtime unavailable ({0}); switching to the official source…": "GitHub 런타임不可用 ({0}), 改用官方源…",
  "Gitee update source (optional)": "Gitee 업데이트源 (可选)",
  "Go to Settings → Performance & resources and click \"Resize now\"; confirm the reset prompt if shown (installed apps will be cleared).": "到「설정 → 性能与资源」点「立即扩容」；팁필요重置时확인한 번 (会지우기已装앱).",

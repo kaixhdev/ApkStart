@@ -331,7 +331,7 @@
  "General & setup": "Основное и установка",
  "Generic compatibility image (managed automatically)": "Универсальный образ совместимости (управляется автоматически)",
  "Get started": "Начать работу",
- "Get the latest version from GitHub (RoutineMiku/apkstart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "Получает последнюю версию с GitHub (RoutineMiku/apkstart); облегчённая версия скачает портативный пакет и автоматически заменит файлы программы,\n            среда выполнения, установленные приложения и снимки не затрагиваются.",
+ "Get the latest version from GitHub (kaixhdev/ApkStart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "Получает последнюю версию с GitHub (kaixhdev/ApkStart); облегчённая версия скачает портативный пакет и автоматически заменит файлы программы,\n            среда выполнения, установленные приложения и снимки не затрагиваются.",
  "GitHub only": "Только GitHub",
  "Gitee only (usually fastest in China)": "Только Gitee (обычно быстрее всего в Китае)",
  "Gitee read-only token (usually blank)": "Токен Gitee только для чтения (обычно заполнять не нужно)",

@@ -37,4 +37,4 @@ This application is not directed at children under 13 and does not knowingly col
 ## 6. Changes & Contact
 
 Updates to this policy will be posted on this page with an updated "Last updated" date.
-For questions, open an issue at https://github.com/RoutineMiku/apkstart/issues.
+For questions, open an issue at https://github.com/kaixhdev/ApkStart/issues.

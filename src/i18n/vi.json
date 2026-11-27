@@ -224,7 +224,7 @@
  "Game mode keeps the Android VM at a higher CPU priority and reduces host-side polling for the lowest input and display latency; other programs on the PC may slow down. When no app window is open, the container drops priority automatically.": "Chế độ game giữ máy ảo Android ở mức ưu tiên CPU cao hơn và giảm thăm dò phía máy chủ, cho độ trễ nhập liệu và hình ảnh thấp nhất; đổi lại các chương trình khác trên máy sẽ chậm hơn. Khi không có cửa sổ ứng dụng, container vẫn tự hạ ưu tiên và tạm nghỉ.",
  "Generic compatibility image (managed automatically)": "Image tương thích đa năng (tự quản lý)",
  "Get started": "Bắt đầu",
- "Get the latest version from GitHub (RoutineMiku/apkstart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "Lấy phiên bản mới nhất từ GitHub (RoutineMiku/apkstart); bản nhẹ sẽ tải gói portable và tự thay thế tệp chương trình. Runtime, ứng dụng đã cài và snapshot không bị ảnh hưởng.",
+ "Get the latest version from GitHub (kaixhdev/ApkStart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "Lấy phiên bản mới nhất từ GitHub (kaixhdev/ApkStart); bản nhẹ sẽ tải gói portable và tự thay thế tệp chương trình. Runtime, ứng dụng đã cài và snapshot không bị ảnh hưởng.",
  "GitHub only": "Chỉ dùng GitHub",
  "Gitee only (usually fastest in China)": "Chỉ dùng Gitee (thường nhanh nhất ở Trung Quốc)",
  "Gitee read-only token (usually blank)": "Token chỉ đọc Gitee (thường không cần điền)",

@@ -247,7 +247,7 @@
  "Game mode keeps the Android VM at a higher CPU priority and reduces host-side polling for the lowest input and display latency; other programs on the PC may slow down. When no app window is open, the container drops priority automatically.": "游戏モード会让Android仮想マシン保持较高 CPU 优先级并减少宿主侧轮询、输入与画面延迟最低；代价是整机其他プログラム会变慢。没有アプリウィンドウ时容器仍会自動降优先级停放。",
  "General & setup": "常用与インストール",
  "Generic compatibility image (managed automatically)": "通用兼容イメージ（自動管理）",
- "Get the latest version from GitHub (RoutineMiku/apkstart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "从 GitHub（RoutineMiku/apkstart）获取最新バージョン；轻量版会ダウンロード便携包并自動替换プログラムファイル、 ランタイム、已装アプリ与スナップショット都不受影响。",
+ "Get the latest version from GitHub (kaixhdev/ApkStart). The lightweight edition downloads a portable package and replaces the program files automatically; the runtime, installed apps and snapshots are unaffected.": "从 GitHub（kaixhdev/ApkStart）获取最新バージョン；轻量版会ダウンロード便携包并自動替换プログラムファイル、 ランタイム、已装アプリ与スナップショット都不受影响。",
  "GitHub runtime unavailable ({0}); switching to the official source…": "GitHub ランタイム不可用（{0}）、改用官方源…",
  "Go to Settings → Performance & resources and click \"Resize now\"; confirm the reset prompt if shown (installed apps will be cleared).": "到「設定 → 性能与资源」点「立即扩容」；ヒント必要重置时確認一度（会クリア已装アプリ）。",
  "Hardware acceleration": "ハードウェアアクセラレーション",
